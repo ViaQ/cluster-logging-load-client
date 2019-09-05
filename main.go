@@ -1,8 +1,12 @@
 package main
 
 import (
+	"flag"
+	"fmt"
+	"io"
 	"math/rand"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/cortexproject/cortex/pkg/util"
@@ -24,6 +28,27 @@ func init() {
 }
 
 func main() {
+	api := flag.Bool("--api", false, "send log via loki api")
+	flag.Parse()
+	if *api {
+		logViaAPI()
+		return
+	}
+	for {
+		var out io.Writer
+		switch rand.Intn(1) {
+		case 0:
+			out = os.Stderr
+		default:
+			out = os.Stdout
+
+		}
+		fmt.Fprintf(out, "ts=%s lvl=%s msg=%s \n", time.Now().Format(time.RFC3339Nano), randLevel(), randomLog())
+		time.Sleep(time.Millisecond * 100)
+	}
+}
+
+func logViaAPI() {
 	u, err := url.Parse("http://localhost:3100/api/prom/push")
 	if err != nil {
 		panic(err)
@@ -52,7 +77,6 @@ func main() {
 			}, time.Now(), randomLog())
 		time.Sleep(time.Millisecond * 100)
 	}
-
 }
 
 func randomLog() string {
