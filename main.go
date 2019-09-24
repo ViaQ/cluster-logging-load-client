@@ -28,7 +28,11 @@ func init() {
 }
 
 func main() {
-	api := flag.Bool("--api", false, "send log via loki api")
+	now := time.Now().UnixNano()
+	f := float64(now) / 1e9
+	fmt.Println(now)
+	fmt.Printf("%f\n", f)
+	api := flag.Bool("api", false, "send log via loki api")
 	flag.Parse()
 	if *api {
 		logViaAPI()
@@ -36,14 +40,17 @@ func main() {
 	}
 	for {
 		var out io.Writer
-		switch rand.Intn(1) {
-		case 0:
+		var stream string
+		switch rand.Intn(2) {
+		case 1:
 			out = os.Stderr
+			stream = "stderr"
 		default:
 			out = os.Stdout
+			stream = "stdout"
 
 		}
-		fmt.Fprintf(out, "ts=%s lvl=%s msg=%s \n", time.Now().Format(time.RFC3339Nano), randLevel(), randomLog())
+		fmt.Fprintf(out, "ts=%s stream=%s lvl=%s msg=%s \n", time.Now().Format(time.RFC3339Nano), stream, randLevel(), randomLog())
 		time.Sleep(time.Millisecond * 100)
 	}
 }
@@ -85,7 +92,7 @@ func randomLog() string {
 
 var loglines = []string{
 	"failing to cook potatoes",
-	"sucessfully launched a car in space",
+	"successfully launched a car in space",
 	"we got here",
 	"panic: could not read the manual",
 	"error while reading floppy disk",
@@ -113,7 +120,7 @@ var loglines = []string{
 }
 
 func randLevel() model.LabelValue {
-	switch rand.Intn(3) {
+	switch rand.Intn(4) {
 	case 0:
 		return "info"
 	case 1:
@@ -126,7 +133,7 @@ func randLevel() model.LabelValue {
 }
 
 func randComponent() model.LabelValue {
-	switch rand.Intn(4) {
+	switch rand.Intn(5) {
 	case 0:
 		return "devopsend"
 	case 1:
@@ -141,7 +148,7 @@ func randComponent() model.LabelValue {
 }
 
 func randService() model.LabelValue {
-	switch rand.Intn(5) {
+	switch rand.Intn(6) {
 	case 0:
 		return "potatoes-cart"
 	case 1:
