@@ -22,9 +22,7 @@ func init() {
 	if err := lvl.Set("debug"); err != nil {
 		panic(err)
 	}
-	util.InitLogger(&server.Config{
-		LogLevel: lvl,
-	})
+	util.InitLogger(&server.Config{LogLevel: lvl})
 }
 
 func main() {
