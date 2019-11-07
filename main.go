@@ -73,19 +73,35 @@ func logViaAPI() {
 		panic(err)
 	}
 	defer c.Stop()
+
+	ticker := time.NewTicker(time.Millisecond * 100)
+	defer ticker.Stop()
 	for {
+		<-ticker.C
 		_ = c.Handle(
 			model.LabelSet{
 				"service":   randService(),
 				"level":     randLevel(),
 				"component": randComponent(),
 			}, time.Now(), randomLog())
-		time.Sleep(time.Millisecond * 100)
 	}
 }
 
 func randomLog() string {
 	return loglines[rand.Intn(len(loglines))]
+}
+
+func randLevel() model.LabelValue {
+	return levels[rand.Intn(4)]
+}
+
+func randComponent() model.LabelValue {
+	return components[rand.Intn(5)]
+
+}
+
+func randService() model.LabelValue {
+	return services[rand.Intn(6)]
 }
 
 var loglines = []string{
@@ -117,47 +133,26 @@ var loglines = []string{
 	"panic: this should never happen",
 }
 
-func randLevel() model.LabelValue {
-	switch rand.Intn(4) {
-	case 0:
-		return "info"
-	case 1:
-		return "warn"
-	case 2:
-		return "debug"
-	default:
-		return "error"
-	}
+var levels = []model.LabelValue{
+	"info",
+	"warn",
+	"debug",
+	"error",
 }
 
-func randComponent() model.LabelValue {
-	switch rand.Intn(5) {
-	case 0:
-		return "devopsend"
-	case 1:
-		return "fullstackend"
-	case 2:
-		return "frontend"
-	case 3:
-		return "everything-else"
-	default:
-		return "backend"
-	}
+var components = []model.LabelValue{
+	"devopsend",
+	"fullstackend",
+	"frontend",
+	"everything-else",
+	"backend",
 }
 
-func randService() model.LabelValue {
-	switch rand.Intn(6) {
-	case 0:
-		return "potatoes-cart"
-	case 1:
-		return "phishing"
-	case 2:
-		return "stateless-database"
-	case 3:
-		return "random-policies-generator"
-	case 4:
-		return "cookie-jar"
-	default:
-		return "distributed-unicorn"
-	}
+var services = []model.LabelValue{
+	"potatoes-cart",
+	"phishing",
+	"stateless-database",
+	"random-policies-generator",
+	"cookie-jar",
+	"distributed-unicorn",
 }
