@@ -17,23 +17,21 @@ import (
 	"github.com/weaveworks/common/server"
 )
 
+var apiURL = flag.String("url", "", "send log via loki api using the provided url (e.g http://localhost:3100/api/prom/push)")
+var logPerSec = flag.Int64("logps", 500, "The total amount of log per second to generate.(default 500)")
+
 func init() {
 	lvl := logging.Level{}
 	if err := lvl.Set("debug"); err != nil {
 		panic(err)
 	}
 	util.InitLogger(&server.Config{LogLevel: lvl})
+	flag.Parse()
 }
 
 func main() {
-	now := time.Now().UnixNano()
-	f := float64(now) / 1e9
-	fmt.Println(now)
-	fmt.Printf("%f\n", f)
-	api := flag.Bool("api", false, "send log via loki api")
-	flag.Parse()
-	if *api {
-		logViaAPI()
+	if apiURL != nil && *apiURL != "" {
+		logViaAPI(*apiURL)
 		return
 	}
 	for {
@@ -49,12 +47,12 @@ func main() {
 
 		}
 		fmt.Fprintf(out, "ts=%s stream=%s lvl=%s msg=%s \n", time.Now().Format(time.RFC3339Nano), stream, randLevel(), randomLog())
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Second / time.Duration(*logPerSec))
 	}
 }
 
-func logViaAPI() {
-	u, err := url.Parse("http://localhost:3100/api/prom/push")
+func logViaAPI(apiURL string) {
+	u, err := url.Parse(apiURL)
 	if err != nil {
 		panic(err)
 	}
@@ -74,7 +72,7 @@ func logViaAPI() {
 	}
 	defer c.Stop()
 
-	ticker := time.NewTicker(time.Millisecond * 100)
+	ticker := time.NewTicker(time.Second / time.Duration(*logPerSec))
 	defer ticker.Stop()
 	for {
 		<-ticker.C

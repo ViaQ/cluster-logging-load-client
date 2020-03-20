@@ -1,4 +1,4 @@
-module github.com/Kuqd/logger
+module github.com/cyriltovena/logger
 
 go 1.12
 
