@@ -30,8 +30,12 @@ func init() {
 }
 
 func main() {
+	host, err := os.Hostname()
+	if err != nil {
+		panic(err)
+	}
 	if apiURL != nil && *apiURL != "" {
-		logViaAPI(*apiURL)
+		logViaAPI(*apiURL, host)
 		return
 	}
 	for {
@@ -46,12 +50,12 @@ func main() {
 			stream = "stdout"
 
 		}
-		fmt.Fprintf(out, "ts=%s stream=%s lvl=%s msg=%s \n", time.Now().Format(time.RFC3339Nano), stream, randLevel(), randomLog())
+		fmt.Fprintf(out, "ts=%s stream=%s host=%s lvl=%s msg=%s \n", time.Now().Format(time.RFC3339Nano), stream, host, randLevel(), randomLog())
 		time.Sleep(time.Second / time.Duration(*logPerSec))
 	}
 }
 
-func logViaAPI(apiURL string) {
+func logViaAPI(apiURL string, hostname string) {
 	u, err := url.Parse(apiURL)
 	if err != nil {
 		panic(err)
@@ -78,6 +82,7 @@ func logViaAPI(apiURL string) {
 		<-ticker.C
 		_ = c.Handle(
 			model.LabelSet{
+				"hostname":  model.LabelValue(hostname),
 				"service":   randService(),
 				"level":     randLevel(),
 				"component": randComponent(),
