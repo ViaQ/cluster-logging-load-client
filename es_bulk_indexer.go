@@ -46,6 +46,7 @@ type logContent struct {
 func logViaEsCli(apiURL string, hostname string) {
 	retryBackoff := backoff.NewExponentialBackOff()
 	es, err := elasticsearch.NewClient(elasticsearch.Config{
+		Addresses: []string{apiURL},
 		// Retry on 429 TooManyRequests statuses
 		//
 		RetryOnStatus: []int{502, 503, 504, 429},
