@@ -3,7 +3,11 @@ module github.com/cyriltovena/logger
 go 1.12
 
 require (
+	github.com/cenkalti/backoff/v4 v4.1.0
 	github.com/cortexproject/cortex v0.1.0-rc.0.0.20190825121948-934998160dbe
+	github.com/dustin/go-humanize v1.0.0
+	github.com/elastic/go-elasticsearch/v6 v6.8.10
+	github.com/elastic/go-elasticsearch/v8 v8.0.0-20201104130540-2e1f801663c6 // indirect
 	github.com/go-kit/kit v0.9.0 // indirect
 	github.com/gogo/googleapis v1.2.0 // indirect
 	github.com/gogo/status v1.1.0 // indirect

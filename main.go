@@ -19,6 +19,7 @@ import (
 
 var apiURL = flag.String("url", "", "send log via loki api using the provided url (e.g http://localhost:3100/api/prom/push)")
 var logPerSec = flag.Int64("logps", 500, "The total amount of log per second to generate.(default 500)")
+var remoteType = flag.String("remote-type", "loki", "Type of the remote destination: loki, elasticsearch. (default loki)")
 
 func init() {
 	lvl := logging.Level{}
@@ -35,7 +36,15 @@ func main() {
 		panic(err)
 	}
 	if apiURL != nil && *apiURL != "" {
-		logViaAPI(*apiURL, host)
+		switch *remoteType {
+		case "loki":
+			logViaAPI(*apiURL, host)
+		case "elasticsearch":
+			fmt.Println("Sending logging to es")
+			logViaEsCli(*apiURL, host)
+		default:
+			fmt.Printf("Unsupported remote type: %s\n", *remoteType)
+		}
 		return
 	}
 	for {

@@ -1,4 +1,4 @@
-# Loki log generator
+# Log generator
 
 This project is a simple golang application to generate random logs.
 
@@ -15,3 +15,16 @@ By default the app log 500 logs per seconds, this can be increased or decrease u
 To build a docker image use `make build-image`.
 
 To run the image use: `docker run ctovena/logger:0.1 --url=http://localhost:3100/api/prom/push`
+
+## Generate log to elasticsearch v6
+
+Logger sends logs to elasticsearch using its `bulk` API.
+Launch an elasticsearch(v6) container:
+```
+    make run-es
+```
+
+Run logger and set the remote type to `elasticsearch`: 
+```
+    ./logger --url=http://localhost:9200 --remote-type=elasticsearch
+```
