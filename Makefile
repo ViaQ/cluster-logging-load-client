@@ -3,11 +3,13 @@ PHONY: all build test clean build-image push-image
 
 IMAGE_PREFIX ?= ctovena
 IMAGE_TAG := 0.1
+ES_CONTAINER_NAME=elasticsearch
+ES_IMAGE_TAG=elasticsearch:6.8.12
 
 all: test build-image
 
 build:
-	go build -o logger -v main.go
+	go build -o logger -v main.go es_bulk_indexer.go
 
 test:
 	go test -v ./...
@@ -29,3 +31,9 @@ deploy:
 
 delete:
 	kubectl delete -f deployment.yaml
+
+run-es:
+	docker run -d --name $(ES_CONTAINER_NAME) \
+		-p 9200:9200 -p 9300:9300 \
+		-e "discovery.type=single-node" \
+		$(ES_IMAGE_TAG)
