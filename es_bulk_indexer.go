@@ -5,11 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"os"
-	"os/signal"
 	"runtime"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -27,12 +24,7 @@ var (
 
 	numWorkers = runtime.NumCPU()
 	flushBytes = 5e+6
-	c          = make(chan os.Signal)
 )
-
-func init() {
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-}
 
 type logContent struct {
 	Hostname  string `json:"hostname"`
@@ -96,7 +88,7 @@ func logViaEsCli(apiURL string, hostname string) {
 	ticker := time.NewTicker(time.Second / time.Duration(*logPerSec))
 	for {
 		select {
-		case <-c:
+		case <-stopC:
 			log.Println("\r- Ctrl+C pressed in Terminal")
 			if err := bi.Close(context.Background()); err != nil {
 				log.Fatalf("Unexpected error: %s", err)
@@ -116,7 +108,7 @@ func logViaEsCli(apiURL string, hostname string) {
 			//
 			data, err := json.Marshal(a)
 			if err != nil {
-				log.Fatalf("Cannot encode article %d: %s", a.Body, err)
+				log.Fatalf("Cannot encode article %s: %s", a.Body, err)
 			}
 
 			// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
