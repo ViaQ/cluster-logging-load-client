@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"math/rand"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -27,18 +30,18 @@ var (
 )
 
 type logContent struct {
-	Hostname  string `json:"hostname"`
-	Service   string `json:"service"`
-	Level     string `json:"level"`
-	Component string `json:"component"`
-	Body      string `json:"body"`
+	Hostname  string    `json:"hostname"`
+	Service   string    `json:"service"`
+	Level     string    `json:"level"`
+	Component string    `json:"component"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
-// logViaEsCli uses bulkIndex to inject docs to es
-func logViaEsCli(apiURL string, hostname string) {
+func esClient(esURL string) (*elasticsearch.Client, error) {
 	retryBackoff := backoff.NewExponentialBackOff()
 	es, err := elasticsearch.NewClient(elasticsearch.Config{
-		Addresses: []string{apiURL},
+		Addresses: []string{esURL},
 		// Retry on 429 TooManyRequests statuses
 		//
 		RetryOnStatus: []int{502, 503, 504, 429},
@@ -50,6 +53,70 @@ func logViaEsCli(apiURL string, hostname string) {
 		},
 		MaxRetries: 5,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("Error creating the client: %s", err)
+	}
+	return es, nil
+}
+
+func logQueryES(apiURL string, queries []string) {
+	log.Printf("%d queries: %v\n", len(queries), queries)
+	es, err := esClient(apiURL)
+	if err != nil {
+		log.Fatalf("Error creating the client: %s", err)
+	}
+
+	ticker := time.NewTicker(time.Second / time.Duration(logPerSec))
+
+	for {
+		select {
+		case <-stopC:
+			log.Println("\r- Ctrl+C pressed in Terminal")
+			ticker.Stop()
+			return
+		case <-ticker.C:
+
+			var b strings.Builder
+			q := queries[rand.Intn(len(queries))]
+			log.Printf("query: %v\n", q)
+			b.WriteString(q)
+			res, err := es.Search(
+				es.Search.WithIndex(indexName),
+				es.Search.WithBody(strings.NewReader(b.String())),
+			)
+			if err != nil {
+				log.Fatalf("Error getting search response: %s", err)
+			}
+
+			type envelopeResponse struct {
+				Took int
+				Hits struct {
+					Total int
+					Hits  []struct {
+						ID         string          `json:"_id"`
+						Source     json.RawMessage `json:"_source"`
+						Highlights json.RawMessage `json:"highlight"`
+						Sort       []interface{}   `json:"sort"`
+					}
+				}
+			}
+
+			var r envelopeResponse
+			if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
+				log.Fatalf("Error parsing search response: %s", err)
+			}
+
+			log.Printf("took %d, hit total: %v\n", r.Took, r.Hits.Total)
+			res.Body.Close()
+		}
+	}
+}
+
+const searchAll = `{ "query": { "range": { "created_at": { "time_zone": "UTC", "gte": "now-1d/d", "lt": "now" } } } }`
+
+// logViaEsCli uses bulkIndex to inject docs to es
+func logViaEsCli(apiURL string, hostname string) {
+	es, err := esClient(apiURL)
 	if err != nil {
 		log.Fatalf("Error creating the client: %s", err)
 	}
@@ -85,7 +152,7 @@ func logViaEsCli(apiURL string, hostname string) {
 	}
 	res.Body.Close()
 
-	ticker := time.NewTicker(time.Second / time.Duration(*logPerSec))
+	ticker := time.NewTicker(time.Second / time.Duration(logPerSec))
 	for {
 		select {
 		case <-stopC:
@@ -103,6 +170,7 @@ func logViaEsCli(apiURL string, hostname string) {
 				Level:     string(randLevel()),
 				Component: string(randComponent()),
 				Body:      randomLog(),
+				CreatedAt: time.Now().Round(time.Second).UTC(),
 			}
 			// Prepare the data payload: encode log to JSON
 			//
