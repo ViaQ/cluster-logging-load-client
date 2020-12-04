@@ -11,8 +11,11 @@ import (
 	_ "github.com/gogo/protobuf/gogoproto"
 	proto "github.com/gogo/protobuf/proto"
 	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 	io "io"
 	math "math"
+	math_bits "math/bits"
 	reflect "reflect"
 	strconv "strconv"
 	strings "strings"
@@ -27,7 +30,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
 type MatchType int32
 
@@ -77,9 +80,49 @@ func (WriteRequest_SourceEnum) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_893a47d0a749d749, []int{0, 0}
 }
 
+type MetricMetadata_MetricType int32
+
+const (
+	UNKNOWN        MetricMetadata_MetricType = 0
+	COUNTER        MetricMetadata_MetricType = 1
+	GAUGE          MetricMetadata_MetricType = 2
+	HISTOGRAM      MetricMetadata_MetricType = 3
+	GAUGEHISTOGRAM MetricMetadata_MetricType = 4
+	SUMMARY        MetricMetadata_MetricType = 5
+	INFO           MetricMetadata_MetricType = 6
+	STATESET       MetricMetadata_MetricType = 7
+)
+
+var MetricMetadata_MetricType_name = map[int32]string{
+	0: "UNKNOWN",
+	1: "COUNTER",
+	2: "GAUGE",
+	3: "HISTOGRAM",
+	4: "GAUGEHISTOGRAM",
+	5: "SUMMARY",
+	6: "INFO",
+	7: "STATESET",
+}
+
+var MetricMetadata_MetricType_value = map[string]int32{
+	"UNKNOWN":        0,
+	"COUNTER":        1,
+	"GAUGE":          2,
+	"HISTOGRAM":      3,
+	"GAUGEHISTOGRAM": 4,
+	"SUMMARY":        5,
+	"INFO":           6,
+	"STATESET":       7,
+}
+
+func (MetricMetadata_MetricType) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_893a47d0a749d749, []int{26, 0}
+}
+
 type WriteRequest struct {
 	Timeseries []PreallocTimeseries    `protobuf:"bytes,1,rep,name=timeseries,proto3,customtype=PreallocTimeseries" json:"timeseries"`
 	Source     WriteRequest_SourceEnum `protobuf:"varint,2,opt,name=Source,json=source,proto3,enum=cortex.WriteRequest_SourceEnum" json:"Source,omitempty"`
+	Metadata   []*MetricMetadata       `protobuf:"bytes,3,rep,name=metadata,proto3" json:"metadata,omitempty"`
 }
 
 func (m *WriteRequest) Reset()      { *m = WriteRequest{} }
@@ -95,7 +138,7 @@ func (m *WriteRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error)
 		return xxx_messageInfo_WriteRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -121,6 +164,13 @@ func (m *WriteRequest) GetSource() WriteRequest_SourceEnum {
 	return API
 }
 
+func (m *WriteRequest) GetMetadata() []*MetricMetadata {
+	if m != nil {
+		return m.Metadata
+	}
+	return nil
+}
+
 type WriteResponse struct {
 }
 
@@ -137,7 +187,7 @@ func (m *WriteResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error
 		return xxx_messageInfo_WriteResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -173,7 +223,7 @@ func (m *ReadRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) 
 		return xxx_messageInfo_ReadRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -216,7 +266,7 @@ func (m *ReadResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error)
 		return xxx_messageInfo_ReadResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -261,7 +311,7 @@ func (m *QueryRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error)
 		return xxx_messageInfo_QueryRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -318,7 +368,7 @@ func (m *QueryResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error
 		return xxx_messageInfo_QueryResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -344,9 +394,10 @@ func (m *QueryResponse) GetTimeseries() []TimeSeries {
 	return nil
 }
 
-// QueryStreamResponse contains a batch of timeseries chunks.
+// QueryStreamResponse contains a batch of timeseries chunks or timeseries. Only one of these series will be populated.
 type QueryStreamResponse struct {
-	Timeseries []TimeSeriesChunk `protobuf:"bytes,1,rep,name=timeseries,proto3" json:"timeseries"`
+	Chunkseries []TimeSeriesChunk `protobuf:"bytes,1,rep,name=chunkseries,proto3" json:"chunkseries"`
+	Timeseries  []TimeSeries      `protobuf:"bytes,2,rep,name=timeseries,proto3" json:"timeseries"`
 }
 
 func (m *QueryStreamResponse) Reset()      { *m = QueryStreamResponse{} }
@@ -362,7 +413,7 @@ func (m *QueryStreamResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte,
 		return xxx_messageInfo_QueryStreamResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -381,7 +432,14 @@ func (m *QueryStreamResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_QueryStreamResponse proto.InternalMessageInfo
 
-func (m *QueryStreamResponse) GetTimeseries() []TimeSeriesChunk {
+func (m *QueryStreamResponse) GetChunkseries() []TimeSeriesChunk {
+	if m != nil {
+		return m.Chunkseries
+	}
+	return nil
+}
+
+func (m *QueryStreamResponse) GetTimeseries() []TimeSeries {
 	if m != nil {
 		return m.Timeseries
 	}
@@ -405,7 +463,7 @@ func (m *LabelValuesRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, 
 		return xxx_messageInfo_LabelValuesRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -448,7 +506,7 @@ func (m *LabelValuesResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte,
 		return xxx_messageInfo_LabelValuesResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -490,7 +548,7 @@ func (m *LabelNamesRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, e
 		return xxx_messageInfo_LabelNamesRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -526,7 +584,7 @@ func (m *LabelNamesResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, 
 		return xxx_messageInfo_LabelNamesResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -568,7 +626,7 @@ func (m *UserStatsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, er
 		return xxx_messageInfo_UserStatsRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -607,7 +665,7 @@ func (m *UserStatsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, e
 		return xxx_messageInfo_UserStatsResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -672,7 +730,7 @@ func (m *UserIDStatsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte,
 		return xxx_messageInfo_UserIDStatsResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -722,7 +780,7 @@ func (m *UsersStatsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, 
 		return xxx_messageInfo_UsersStatsResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -767,7 +825,7 @@ func (m *MetricsForLabelMatchersRequest) XXX_Marshal(b []byte, deterministic boo
 		return xxx_messageInfo_MetricsForLabelMatchersRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -824,7 +882,7 @@ func (m *MetricsForLabelMatchersResponse) XXX_Marshal(b []byte, deterministic bo
 		return xxx_messageInfo_MetricsForLabelMatchersResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -850,6 +908,84 @@ func (m *MetricsForLabelMatchersResponse) GetMetric() []*Metric {
 	return nil
 }
 
+type MetricsMetadataRequest struct {
+}
+
+func (m *MetricsMetadataRequest) Reset()      { *m = MetricsMetadataRequest{} }
+func (*MetricsMetadataRequest) ProtoMessage() {}
+func (*MetricsMetadataRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_893a47d0a749d749, []int{17}
+}
+func (m *MetricsMetadataRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MetricsMetadataRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MetricsMetadataRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MetricsMetadataRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MetricsMetadataRequest.Merge(m, src)
+}
+func (m *MetricsMetadataRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *MetricsMetadataRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_MetricsMetadataRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MetricsMetadataRequest proto.InternalMessageInfo
+
+type MetricsMetadataResponse struct {
+	Metadata []*MetricMetadata `protobuf:"bytes,1,rep,name=metadata,proto3" json:"metadata,omitempty"`
+}
+
+func (m *MetricsMetadataResponse) Reset()      { *m = MetricsMetadataResponse{} }
+func (*MetricsMetadataResponse) ProtoMessage() {}
+func (*MetricsMetadataResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_893a47d0a749d749, []int{18}
+}
+func (m *MetricsMetadataResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MetricsMetadataResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MetricsMetadataResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MetricsMetadataResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MetricsMetadataResponse.Merge(m, src)
+}
+func (m *MetricsMetadataResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *MetricsMetadataResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_MetricsMetadataResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MetricsMetadataResponse proto.InternalMessageInfo
+
+func (m *MetricsMetadataResponse) GetMetadata() []*MetricMetadata {
+	if m != nil {
+		return m.Metadata
+	}
+	return nil
+}
+
 type TimeSeriesChunk struct {
 	FromIngesterId string         `protobuf:"bytes,1,opt,name=from_ingester_id,json=fromIngesterId,proto3" json:"from_ingester_id,omitempty"`
 	UserId         string         `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -860,7 +996,7 @@ type TimeSeriesChunk struct {
 func (m *TimeSeriesChunk) Reset()      { *m = TimeSeriesChunk{} }
 func (*TimeSeriesChunk) ProtoMessage() {}
 func (*TimeSeriesChunk) Descriptor() ([]byte, []int) {
-	return fileDescriptor_893a47d0a749d749, []int{17}
+	return fileDescriptor_893a47d0a749d749, []int{19}
 }
 func (m *TimeSeriesChunk) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -870,7 +1006,7 @@ func (m *TimeSeriesChunk) XXX_Marshal(b []byte, deterministic bool) ([]byte, err
 		return xxx_messageInfo_TimeSeriesChunk.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -920,7 +1056,7 @@ type Chunk struct {
 func (m *Chunk) Reset()      { *m = Chunk{} }
 func (*Chunk) ProtoMessage() {}
 func (*Chunk) Descriptor() ([]byte, []int) {
-	return fileDescriptor_893a47d0a749d749, []int{18}
+	return fileDescriptor_893a47d0a749d749, []int{20}
 }
 func (m *Chunk) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -930,7 +1066,7 @@ func (m *Chunk) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_Chunk.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -983,7 +1119,7 @@ type TransferChunksResponse struct {
 func (m *TransferChunksResponse) Reset()      { *m = TransferChunksResponse{} }
 func (*TransferChunksResponse) ProtoMessage() {}
 func (*TransferChunksResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_893a47d0a749d749, []int{19}
+	return fileDescriptor_893a47d0a749d749, []int{21}
 }
 func (m *TransferChunksResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -993,7 +1129,7 @@ func (m *TransferChunksResponse) XXX_Marshal(b []byte, deterministic bool) ([]by
 		return xxx_messageInfo_TransferChunksResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1021,7 +1157,7 @@ type TimeSeries struct {
 func (m *TimeSeries) Reset()      { *m = TimeSeries{} }
 func (*TimeSeries) ProtoMessage() {}
 func (*TimeSeries) Descriptor() ([]byte, []int) {
-	return fileDescriptor_893a47d0a749d749, []int{20}
+	return fileDescriptor_893a47d0a749d749, []int{22}
 }
 func (m *TimeSeries) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1031,7 +1167,7 @@ func (m *TimeSeries) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_TimeSeries.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1065,7 +1201,7 @@ type LabelPair struct {
 func (m *LabelPair) Reset()      { *m = LabelPair{} }
 func (*LabelPair) ProtoMessage() {}
 func (*LabelPair) Descriptor() ([]byte, []int) {
-	return fileDescriptor_893a47d0a749d749, []int{21}
+	return fileDescriptor_893a47d0a749d749, []int{23}
 }
 func (m *LabelPair) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1075,7 +1211,7 @@ func (m *LabelPair) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_LabelPair.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1116,7 +1252,7 @@ type Sample struct {
 func (m *Sample) Reset()      { *m = Sample{} }
 func (*Sample) ProtoMessage() {}
 func (*Sample) Descriptor() ([]byte, []int) {
-	return fileDescriptor_893a47d0a749d749, []int{22}
+	return fileDescriptor_893a47d0a749d749, []int{24}
 }
 func (m *Sample) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1126,7 +1262,7 @@ func (m *Sample) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_Sample.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1166,7 +1302,7 @@ type LabelMatchers struct {
 func (m *LabelMatchers) Reset()      { *m = LabelMatchers{} }
 func (*LabelMatchers) ProtoMessage() {}
 func (*LabelMatchers) Descriptor() ([]byte, []int) {
-	return fileDescriptor_893a47d0a749d749, []int{23}
+	return fileDescriptor_893a47d0a749d749, []int{25}
 }
 func (m *LabelMatchers) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1176,7 +1312,7 @@ func (m *LabelMatchers) XXX_Marshal(b []byte, deterministic bool) ([]byte, error
 		return xxx_messageInfo_LabelMatchers.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1202,6 +1338,73 @@ func (m *LabelMatchers) GetMatchers() []*LabelMatcher {
 	return nil
 }
 
+type MetricMetadata struct {
+	Type       MetricMetadata_MetricType `protobuf:"varint,1,opt,name=type,proto3,enum=cortex.MetricMetadata_MetricType" json:"type,omitempty"`
+	MetricName string                    `protobuf:"bytes,2,opt,name=metric_name,json=metricName,proto3" json:"metric_name,omitempty"`
+	Help       string                    `protobuf:"bytes,4,opt,name=help,proto3" json:"help,omitempty"`
+	Unit       string                    `protobuf:"bytes,5,opt,name=unit,proto3" json:"unit,omitempty"`
+}
+
+func (m *MetricMetadata) Reset()      { *m = MetricMetadata{} }
+func (*MetricMetadata) ProtoMessage() {}
+func (*MetricMetadata) Descriptor() ([]byte, []int) {
+	return fileDescriptor_893a47d0a749d749, []int{26}
+}
+func (m *MetricMetadata) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MetricMetadata) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MetricMetadata.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MetricMetadata) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MetricMetadata.Merge(m, src)
+}
+func (m *MetricMetadata) XXX_Size() int {
+	return m.Size()
+}
+func (m *MetricMetadata) XXX_DiscardUnknown() {
+	xxx_messageInfo_MetricMetadata.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MetricMetadata proto.InternalMessageInfo
+
+func (m *MetricMetadata) GetType() MetricMetadata_MetricType {
+	if m != nil {
+		return m.Type
+	}
+	return UNKNOWN
+}
+
+func (m *MetricMetadata) GetMetricName() string {
+	if m != nil {
+		return m.MetricName
+	}
+	return ""
+}
+
+func (m *MetricMetadata) GetHelp() string {
+	if m != nil {
+		return m.Help
+	}
+	return ""
+}
+
+func (m *MetricMetadata) GetUnit() string {
+	if m != nil {
+		return m.Unit
+	}
+	return ""
+}
+
 type Metric struct {
 	Labels []LabelAdapter `protobuf:"bytes,1,rep,name=labels,proto3,customtype=LabelAdapter" json:"labels"`
 }
@@ -1209,7 +1412,7 @@ type Metric struct {
 func (m *Metric) Reset()      { *m = Metric{} }
 func (*Metric) ProtoMessage() {}
 func (*Metric) Descriptor() ([]byte, []int) {
-	return fileDescriptor_893a47d0a749d749, []int{24}
+	return fileDescriptor_893a47d0a749d749, []int{27}
 }
 func (m *Metric) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1219,7 +1422,7 @@ func (m *Metric) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_Metric.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1247,7 +1450,7 @@ type LabelMatcher struct {
 func (m *LabelMatcher) Reset()      { *m = LabelMatcher{} }
 func (*LabelMatcher) ProtoMessage() {}
 func (*LabelMatcher) Descriptor() ([]byte, []int) {
-	return fileDescriptor_893a47d0a749d749, []int{25}
+	return fileDescriptor_893a47d0a749d749, []int{28}
 }
 func (m *LabelMatcher) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1257,7 +1460,7 @@ func (m *LabelMatcher) XXX_Marshal(b []byte, deterministic bool) ([]byte, error)
 		return xxx_messageInfo_LabelMatcher.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1297,9 +1500,112 @@ func (m *LabelMatcher) GetValue() string {
 	return ""
 }
 
+type TimeSeriesFile struct {
+	FromIngesterId string `protobuf:"bytes,1,opt,name=from_ingester_id,json=fromIngesterId,proto3" json:"from_ingester_id,omitempty"`
+	UserId         string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Filename       string `protobuf:"bytes,3,opt,name=filename,proto3" json:"filename,omitempty"`
+	Data           []byte `protobuf:"bytes,4,opt,name=data,proto3" json:"data,omitempty"`
+}
+
+func (m *TimeSeriesFile) Reset()      { *m = TimeSeriesFile{} }
+func (*TimeSeriesFile) ProtoMessage() {}
+func (*TimeSeriesFile) Descriptor() ([]byte, []int) {
+	return fileDescriptor_893a47d0a749d749, []int{29}
+}
+func (m *TimeSeriesFile) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *TimeSeriesFile) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_TimeSeriesFile.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *TimeSeriesFile) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TimeSeriesFile.Merge(m, src)
+}
+func (m *TimeSeriesFile) XXX_Size() int {
+	return m.Size()
+}
+func (m *TimeSeriesFile) XXX_DiscardUnknown() {
+	xxx_messageInfo_TimeSeriesFile.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_TimeSeriesFile proto.InternalMessageInfo
+
+func (m *TimeSeriesFile) GetFromIngesterId() string {
+	if m != nil {
+		return m.FromIngesterId
+	}
+	return ""
+}
+
+func (m *TimeSeriesFile) GetUserId() string {
+	if m != nil {
+		return m.UserId
+	}
+	return ""
+}
+
+func (m *TimeSeriesFile) GetFilename() string {
+	if m != nil {
+		return m.Filename
+	}
+	return ""
+}
+
+func (m *TimeSeriesFile) GetData() []byte {
+	if m != nil {
+		return m.Data
+	}
+	return nil
+}
+
+type TransferTSDBResponse struct {
+}
+
+func (m *TransferTSDBResponse) Reset()      { *m = TransferTSDBResponse{} }
+func (*TransferTSDBResponse) ProtoMessage() {}
+func (*TransferTSDBResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_893a47d0a749d749, []int{30}
+}
+func (m *TransferTSDBResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *TransferTSDBResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_TransferTSDBResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *TransferTSDBResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TransferTSDBResponse.Merge(m, src)
+}
+func (m *TransferTSDBResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *TransferTSDBResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_TransferTSDBResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_TransferTSDBResponse proto.InternalMessageInfo
+
 func init() {
 	proto.RegisterEnum("cortex.MatchType", MatchType_name, MatchType_value)
 	proto.RegisterEnum("cortex.WriteRequest_SourceEnum", WriteRequest_SourceEnum_name, WriteRequest_SourceEnum_value)
+	proto.RegisterEnum("cortex.MetricMetadata_MetricType", MetricMetadata_MetricType_name, MetricMetadata_MetricType_value)
 	proto.RegisterType((*WriteRequest)(nil), "cortex.WriteRequest")
 	proto.RegisterType((*WriteResponse)(nil), "cortex.WriteResponse")
 	proto.RegisterType((*ReadRequest)(nil), "cortex.ReadRequest")
@@ -1317,6 +1623,8 @@ func init() {
 	proto.RegisterType((*UsersStatsResponse)(nil), "cortex.UsersStatsResponse")
 	proto.RegisterType((*MetricsForLabelMatchersRequest)(nil), "cortex.MetricsForLabelMatchersRequest")
 	proto.RegisterType((*MetricsForLabelMatchersResponse)(nil), "cortex.MetricsForLabelMatchersResponse")
+	proto.RegisterType((*MetricsMetadataRequest)(nil), "cortex.MetricsMetadataRequest")
+	proto.RegisterType((*MetricsMetadataResponse)(nil), "cortex.MetricsMetadataResponse")
 	proto.RegisterType((*TimeSeriesChunk)(nil), "cortex.TimeSeriesChunk")
 	proto.RegisterType((*Chunk)(nil), "cortex.Chunk")
 	proto.RegisterType((*TransferChunksResponse)(nil), "cortex.TransferChunksResponse")
@@ -1324,90 +1632,110 @@ func init() {
 	proto.RegisterType((*LabelPair)(nil), "cortex.LabelPair")
 	proto.RegisterType((*Sample)(nil), "cortex.Sample")
 	proto.RegisterType((*LabelMatchers)(nil), "cortex.LabelMatchers")
+	proto.RegisterType((*MetricMetadata)(nil), "cortex.MetricMetadata")
 	proto.RegisterType((*Metric)(nil), "cortex.Metric")
 	proto.RegisterType((*LabelMatcher)(nil), "cortex.LabelMatcher")
+	proto.RegisterType((*TimeSeriesFile)(nil), "cortex.TimeSeriesFile")
+	proto.RegisterType((*TransferTSDBResponse)(nil), "cortex.TransferTSDBResponse")
 }
 
 func init() { proto.RegisterFile("cortex.proto", fileDescriptor_893a47d0a749d749) }
 
 var fileDescriptor_893a47d0a749d749 = []byte{
-	// 1205 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x57, 0x4f, 0x6f, 0x1b, 0x45,
-	0x14, 0xdf, 0x8d, 0xff, 0x24, 0x7e, 0x5e, 0xbb, 0xce, 0x24, 0xa5, 0xae, 0x2b, 0xd6, 0x65, 0xa4,
-	0x96, 0x08, 0xa8, 0x5b, 0x52, 0x15, 0x7a, 0xa0, 0xaa, 0x9c, 0xd6, 0x6d, 0x8d, 0x92, 0x34, 0x1d,
-	0xbb, 0x80, 0x90, 0x90, 0xb5, 0xb1, 0xa7, 0xc9, 0x8a, 0xfd, 0xe3, 0xee, 0xcc, 0x22, 0x7a, 0x40,
-	0xe2, 0x1b, 0xc0, 0x11, 0xbe, 0x01, 0x67, 0x2e, 0x70, 0xe6, 0xd4, 0x63, 0x8e, 0x15, 0x87, 0x8a,
-	0x38, 0x17, 0x8e, 0xfd, 0x08, 0x68, 0x67, 0x66, 0xd7, 0xbb, 0xae, 0x2d, 0x22, 0x50, 0x6f, 0x9e,
-	0xf7, 0x7e, 0xef, 0x37, 0x6f, 0xde, 0xdf, 0x35, 0x18, 0x43, 0x3f, 0xe0, 0xf4, 0xdb, 0xd6, 0x38,
-	0xf0, 0xb9, 0x8f, 0x8a, 0xf2, 0xd4, 0xb8, 0x72, 0x60, 0xf3, 0xc3, 0x70, 0xbf, 0x35, 0xf4, 0xdd,
-	0xab, 0x07, 0xfe, 0x81, 0x7f, 0x55, 0xa8, 0xf7, 0xc3, 0x27, 0xe2, 0x24, 0x0e, 0xe2, 0x97, 0x34,
-	0xc3, 0xbf, 0xeb, 0x60, 0x7c, 0x1e, 0xd8, 0x9c, 0x12, 0xfa, 0x34, 0xa4, 0x8c, 0xa3, 0x5d, 0x00,
-	0x6e, 0xbb, 0x94, 0xd1, 0xc0, 0xa6, 0xac, 0xae, 0x5f, 0xcc, 0x6d, 0x94, 0x37, 0x51, 0x4b, 0x5d,
-	0xd5, 0xb7, 0x5d, 0xda, 0x13, 0x9a, 0xad, 0xc6, 0xf3, 0x97, 0x4d, 0xed, 0xcf, 0x97, 0x4d, 0xb4,
-	0x17, 0x50, 0xcb, 0x71, 0xfc, 0x61, 0x3f, 0xb1, 0x22, 0x29, 0x06, 0xf4, 0x31, 0x14, 0x7b, 0x7e,
-	0x18, 0x0c, 0x69, 0x7d, 0xe9, 0xa2, 0xbe, 0x51, 0xdd, 0x6c, 0xc6, 0x5c, 0xe9, 0x5b, 0x5b, 0x12,
-	0xd2, 0xf1, 0x42, 0x97, 0x14, 0x99, 0xf8, 0x8d, 0x9b, 0x00, 0x53, 0x29, 0x5a, 0x86, 0x5c, 0x7b,
-	0xaf, 0x5b, 0xd3, 0xd0, 0x0a, 0xe4, 0xc9, 0xe3, 0xed, 0x4e, 0x4d, 0xc7, 0x67, 0xa0, 0xa2, 0x38,
-	0xd8, 0xd8, 0xf7, 0x18, 0xc5, 0xb7, 0xa0, 0x4c, 0xa8, 0x35, 0x8a, 0x5f, 0xd2, 0x82, 0xe5, 0xa7,
-	0x61, 0xfa, 0x19, 0xeb, 0xf1, 0xd5, 0x8f, 0x42, 0x1a, 0x3c, 0x53, 0x30, 0x12, 0x83, 0xf0, 0x6d,
-	0x30, 0xa4, 0xb9, 0xa4, 0x43, 0x57, 0x61, 0x39, 0xa0, 0x2c, 0x74, 0x78, 0x6c, 0x7f, 0x76, 0xc6,
-	0x5e, 0xe2, 0x48, 0x8c, 0xc2, 0x3f, 0xe9, 0x60, 0xa4, 0xa9, 0xd1, 0x07, 0x80, 0x18, 0xb7, 0x02,
-	0x3e, 0x10, 0xf1, 0xe0, 0x96, 0x3b, 0x1e, 0xb8, 0x11, 0x99, 0xbe, 0x91, 0x23, 0x35, 0xa1, 0xe9,
-	0xc7, 0x8a, 0x1d, 0x86, 0x36, 0xa0, 0x46, 0xbd, 0x51, 0x16, 0xbb, 0x24, 0xb0, 0x55, 0xea, 0x8d,
-	0xd2, 0xc8, 0x6b, 0xb0, 0xe2, 0x5a, 0x7c, 0x78, 0x48, 0x03, 0x56, 0xcf, 0x65, 0x9f, 0xb6, 0x6d,
-	0xed, 0x53, 0x67, 0x47, 0x2a, 0x49, 0x82, 0xc2, 0x5d, 0xa8, 0x64, 0x9c, 0x46, 0x37, 0x4f, 0x99,
-	0xe6, 0x7c, 0x94, 0xe6, 0x74, 0x42, 0x71, 0x1f, 0xd6, 0x04, 0x55, 0x8f, 0x07, 0xd4, 0x72, 0x13,
-	0xc2, 0x5b, 0x73, 0x08, 0xcf, 0xbd, 0x4e, 0x78, 0xe7, 0x30, 0xf4, 0xbe, 0x9e, 0xc3, 0x7a, 0x1d,
-	0x90, 0x70, 0xfd, 0x33, 0xcb, 0x09, 0x29, 0x8b, 0x03, 0xf8, 0x36, 0x80, 0x13, 0x49, 0x07, 0x9e,
-	0xe5, 0x52, 0x11, 0xb8, 0x12, 0x29, 0x09, 0xc9, 0xae, 0xe5, 0x52, 0x7c, 0x13, 0xd6, 0x32, 0x46,
-	0xca, 0x95, 0x77, 0xc0, 0x90, 0x56, 0xdf, 0x08, 0xb9, 0x70, 0xa6, 0x44, 0xca, 0xce, 0x14, 0x8a,
-	0xd7, 0x60, 0x75, 0x3b, 0xa6, 0x89, 0x6f, 0xc3, 0x37, 0x94, 0x0f, 0x4a, 0xa8, 0xd8, 0x9a, 0x50,
-	0x9e, 0xfa, 0x10, 0x93, 0x41, 0xe2, 0x04, 0xc3, 0x08, 0x6a, 0x8f, 0x19, 0x0d, 0x7a, 0xdc, 0xe2,
-	0x09, 0xd5, 0x6f, 0x3a, 0xac, 0xa6, 0x84, 0x8a, 0xea, 0x12, 0x54, 0x6d, 0xef, 0x80, 0x32, 0x6e,
-	0xfb, 0xde, 0x20, 0xb0, 0xb8, 0x7c, 0x92, 0x4e, 0x2a, 0x89, 0x94, 0x58, 0x9c, 0x46, 0xaf, 0xf6,
-	0x42, 0x77, 0xa0, 0x42, 0x19, 0x95, 0x40, 0x9e, 0x94, 0xbc, 0xd0, 0x95, 0x11, 0x8c, 0xaa, 0xca,
-	0x1a, 0xdb, 0x83, 0x19, 0xa6, 0x9c, 0x60, 0xaa, 0x59, 0x63, 0xbb, 0x9b, 0x21, 0x6b, 0xc1, 0x5a,
-	0x10, 0x3a, 0x74, 0x16, 0x9e, 0x17, 0xf0, 0xd5, 0x48, 0x95, 0xc1, 0xe3, 0xaf, 0x60, 0x2d, 0x72,
-	0xbc, 0x7b, 0x37, 0xeb, 0xfa, 0x39, 0x58, 0x0e, 0x19, 0x0d, 0x06, 0xf6, 0x48, 0xa5, 0xa1, 0x18,
-	0x1d, 0xbb, 0x23, 0x74, 0x05, 0xf2, 0x23, 0x8b, 0x5b, 0xc2, 0xcd, 0xf2, 0xe6, 0xf9, 0x38, 0xe3,
-	0xaf, 0x3d, 0x9e, 0x08, 0x18, 0xbe, 0x0f, 0x28, 0x52, 0xb1, 0x2c, 0xfb, 0x87, 0x50, 0x60, 0x91,
-	0x40, 0xd5, 0xcd, 0x85, 0x34, 0xcb, 0x8c, 0x27, 0x44, 0x22, 0xf1, 0xaf, 0x3a, 0x98, 0x3b, 0x94,
-	0x07, 0xf6, 0x90, 0xdd, 0xf3, 0x83, 0x74, 0xd9, 0xb3, 0x37, 0xdd, 0x7e, 0x37, 0xc1, 0x88, 0x1b,
-	0x6b, 0xc0, 0x28, 0x57, 0x2d, 0x78, 0x76, 0x5e, 0x0b, 0x32, 0x52, 0x8e, 0xa1, 0x3d, 0xca, 0x71,
-	0x17, 0x9a, 0x0b, 0x7d, 0x56, 0xa1, 0xb8, 0x0c, 0x45, 0x57, 0x40, 0x54, 0x2c, 0xaa, 0x31, 0xad,
-	0x34, 0x24, 0x4a, 0x8b, 0xff, 0xd0, 0xe1, 0xcc, 0x4c, 0x5b, 0x45, 0x4f, 0x78, 0x12, 0xf8, 0xae,
-	0xca, 0x75, 0x3a, 0x5b, 0xd5, 0x48, 0xde, 0x55, 0xe2, 0xee, 0x28, 0x9d, 0xce, 0xa5, 0x4c, 0x3a,
-	0x6f, 0x43, 0x51, 0x94, 0x76, 0x3c, 0x58, 0x56, 0x33, 0xaf, 0xda, 0xb3, 0xec, 0x60, 0x6b, 0x5d,
-	0x4d, 0x7e, 0x43, 0x88, 0xda, 0x23, 0x6b, 0xcc, 0x69, 0x40, 0x94, 0x19, 0x7a, 0x1f, 0x8a, 0xc3,
-	0xc8, 0x19, 0x56, 0xcf, 0x0b, 0x82, 0x4a, 0x4c, 0x90, 0xee, 0x7c, 0x05, 0xc1, 0x3f, 0xe8, 0x50,
-	0x90, 0xae, 0xbf, 0xa9, 0x5c, 0x35, 0x60, 0x85, 0x7a, 0x43, 0x7f, 0x64, 0x7b, 0x07, 0xa2, 0x45,
-	0x0a, 0x24, 0x39, 0x23, 0xa4, 0x4a, 0x37, 0xea, 0x05, 0x43, 0xd5, 0x67, 0x1d, 0xde, 0xea, 0x07,
-	0x96, 0xc7, 0x9e, 0xd0, 0x40, 0x38, 0x96, 0x24, 0x06, 0x7f, 0x07, 0x30, 0x8d, 0x77, 0x2a, 0x4e,
-	0xfa, 0x7f, 0x8b, 0x53, 0x0b, 0x96, 0x99, 0xe5, 0x8e, 0x1d, 0xd1, 0xe1, 0x99, 0x44, 0xf7, 0x84,
-	0x58, 0x45, 0x2a, 0x06, 0xe1, 0x1b, 0x50, 0x4a, 0xa8, 0x23, 0xcf, 0x93, 0x89, 0x68, 0x10, 0xf1,
-	0x1b, 0xad, 0x43, 0x41, 0xcc, 0x3b, 0x11, 0x08, 0x83, 0xc8, 0x03, 0x6e, 0x43, 0x51, 0xf2, 0x4d,
-	0xf5, 0x72, 0xe6, 0xc8, 0x43, 0x34, 0x2b, 0xe7, 0x44, 0xb1, 0xcc, 0xa7, 0x21, 0xc4, 0x6d, 0xa8,
-	0x64, 0x4a, 0x35, 0xb3, 0x7e, 0xf4, 0x53, 0xae, 0x9f, 0xa2, 0x2c, 0xdf, 0xff, 0x1d, 0x37, 0x3c,
-	0x00, 0x23, 0x7d, 0x09, 0xba, 0x04, 0x79, 0xfe, 0x6c, 0x2c, 0x5f, 0x55, 0x9d, 0xd2, 0x09, 0x75,
-	0xff, 0xd9, 0x98, 0x12, 0xa1, 0x4e, 0x22, 0x26, 0xab, 0x7d, 0x26, 0x62, 0x39, 0x21, 0x94, 0x87,
-	0xf7, 0x3e, 0x85, 0x52, 0x62, 0x8c, 0x4a, 0x50, 0xe8, 0x3c, 0x7a, 0xdc, 0xde, 0xae, 0x69, 0xa8,
-	0x02, 0xa5, 0xdd, 0x87, 0xfd, 0x81, 0x3c, 0xea, 0xe8, 0x0c, 0x94, 0x49, 0xe7, 0x7e, 0xe7, 0x8b,
-	0xc1, 0x4e, 0xbb, 0x7f, 0xe7, 0x41, 0x6d, 0x09, 0x21, 0xa8, 0x4a, 0xc1, 0xee, 0x43, 0x25, 0xcb,
-	0x6d, 0xfe, 0x5c, 0x80, 0x95, 0xb8, 0xeb, 0xd0, 0x0d, 0xc8, 0xef, 0x85, 0xec, 0x10, 0xad, 0xcf,
-	0xfb, 0x02, 0x6a, 0x9c, 0x9d, 0x91, 0xaa, 0xaa, 0xd3, 0xd0, 0x47, 0x50, 0x10, 0xfb, 0x16, 0xcd,
-	0xfd, 0x7c, 0x69, 0xcc, 0xff, 0x28, 0xc1, 0x1a, 0xba, 0x0b, 0xe5, 0xd4, 0x9e, 0x5e, 0x60, 0x7d,
-	0x21, 0x23, 0xcd, 0xae, 0x74, 0xac, 0x5d, 0xd3, 0xd1, 0x03, 0x28, 0xa7, 0x56, 0x2c, 0x6a, 0x64,
-	0xd2, 0x95, 0x59, 0xd6, 0x53, 0xae, 0x39, 0x3b, 0x19, 0x6b, 0xa8, 0x03, 0x30, 0xdd, 0xae, 0xe8,
-	0x7c, 0x06, 0x9c, 0x5e, 0xc3, 0x8d, 0xc6, 0x3c, 0x55, 0x42, 0xb3, 0x05, 0xa5, 0x64, 0xb7, 0xa0,
-	0xfa, 0x9c, 0x75, 0x23, 0x49, 0x16, 0x2f, 0x22, 0xac, 0xa1, 0x7b, 0x60, 0xb4, 0x1d, 0xe7, 0x34,
-	0x34, 0x8d, 0xb4, 0x86, 0xcd, 0xf2, 0x38, 0x70, 0x6e, 0xc1, 0x38, 0x47, 0x97, 0xb3, 0x63, 0x7b,
-	0xd1, 0x8e, 0x6a, 0xbc, 0xfb, 0xaf, 0xb8, 0xe4, 0xb6, 0x1d, 0xa8, 0x66, 0x47, 0x13, 0x5a, 0xf4,
-	0x7d, 0xd5, 0x30, 0x13, 0xc5, 0xfc, 0x59, 0xa6, 0x6d, 0xe8, 0x5b, 0x9f, 0x1c, 0x1d, 0x9b, 0xda,
-	0x8b, 0x63, 0x53, 0x7b, 0x75, 0x6c, 0xea, 0xdf, 0x4f, 0x4c, 0xfd, 0x97, 0x89, 0xa9, 0x3f, 0x9f,
-	0x98, 0xfa, 0xd1, 0xc4, 0xd4, 0xff, 0x9a, 0x98, 0xfa, 0xdf, 0x13, 0x53, 0x7b, 0x35, 0x31, 0xf5,
-	0x1f, 0x4f, 0x4c, 0xed, 0xe8, 0xc4, 0xd4, 0x5e, 0x9c, 0x98, 0xda, 0x97, 0xc5, 0xa1, 0x63, 0x53,
-	0x8f, 0xef, 0x17, 0xc5, 0xdf, 0x87, 0xeb, 0xff, 0x04, 0x00, 0x00, 0xff, 0xff, 0xb4, 0x9b, 0x35,
-	0x18, 0x85, 0x0c, 0x00, 0x00,
+	// 1488 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x57, 0x4b, 0x6f, 0xdb, 0xc6,
+	0x16, 0x26, 0xad, 0x87, 0xad, 0x23, 0x59, 0xa6, 0xc7, 0x8e, 0xa3, 0x28, 0xf7, 0x52, 0xc9, 0x00,
+	0xc9, 0x35, 0xee, 0xbd, 0x71, 0x52, 0x07, 0x69, 0xbd, 0x68, 0x11, 0xc8, 0x89, 0xec, 0xa8, 0xb5,
+	0x64, 0x67, 0x24, 0x37, 0x6d, 0x81, 0x42, 0xa0, 0xa5, 0xb1, 0x4d, 0x94, 0xa4, 0x14, 0x3e, 0x8a,
+	0x7a, 0x51, 0xa0, 0x40, 0x97, 0x5d, 0x34, 0xcb, 0xfe, 0x84, 0xae, 0xbb, 0x29, 0xba, 0xed, 0x2a,
+	0xcb, 0x2c, 0x83, 0x2e, 0x82, 0xc6, 0xd9, 0x74, 0x19, 0xf4, 0x17, 0x14, 0xf3, 0x20, 0x45, 0xd2,
+	0x52, 0x9b, 0x3e, 0xb2, 0xe3, 0x9c, 0xc7, 0x37, 0x67, 0xbe, 0x39, 0xe7, 0xcc, 0x21, 0x94, 0xfa,
+	0x43, 0xd7, 0xa7, 0x9f, 0xad, 0x8d, 0xdc, 0xa1, 0x3f, 0x44, 0x79, 0xb1, 0xaa, 0x5e, 0x3b, 0x32,
+	0xfd, 0xe3, 0xe0, 0x60, 0xad, 0x3f, 0xb4, 0xaf, 0x1f, 0x0d, 0x8f, 0x86, 0xd7, 0xb9, 0xfa, 0x20,
+	0x38, 0xe4, 0x2b, 0xbe, 0xe0, 0x5f, 0xc2, 0x0d, 0xff, 0xaa, 0x42, 0xe9, 0x81, 0x6b, 0xfa, 0x94,
+	0xd0, 0x87, 0x01, 0xf5, 0x7c, 0xd4, 0x06, 0xf0, 0x4d, 0x9b, 0x7a, 0xd4, 0x35, 0xa9, 0x57, 0x51,
+	0x2f, 0x65, 0x56, 0x8b, 0xeb, 0x68, 0x4d, 0x6e, 0xd5, 0x35, 0x6d, 0xda, 0xe1, 0x9a, 0xcd, 0xea,
+	0xe3, 0x67, 0x35, 0xe5, 0xa7, 0x67, 0x35, 0xb4, 0xe7, 0x52, 0xc3, 0xb2, 0x86, 0xfd, 0x6e, 0xe4,
+	0x45, 0x62, 0x08, 0xe8, 0x2d, 0xc8, 0x77, 0x86, 0x81, 0xdb, 0xa7, 0x95, 0x99, 0x4b, 0xea, 0x6a,
+	0x79, 0xbd, 0x16, 0x62, 0xc5, 0x77, 0x5d, 0x13, 0x26, 0x0d, 0x27, 0xb0, 0x49, 0xde, 0xe3, 0xdf,
+	0x68, 0x03, 0xe6, 0x6c, 0xea, 0x1b, 0x03, 0xc3, 0x37, 0x2a, 0x19, 0x1e, 0xc6, 0x4a, 0xe8, 0xda,
+	0xa2, 0xbe, 0x6b, 0xf6, 0x5b, 0x52, 0xbb, 0x99, 0x7d, 0xfc, 0xac, 0xa6, 0x92, 0xc8, 0x1a, 0xd7,
+	0x00, 0xc6, 0x78, 0x68, 0x16, 0x32, 0xf5, 0xbd, 0xa6, 0xa6, 0xa0, 0x39, 0xc8, 0x92, 0xfd, 0x9d,
+	0x86, 0xa6, 0xe2, 0x05, 0x98, 0x97, 0xbb, 0x7b, 0xa3, 0xa1, 0xe3, 0x51, 0xfc, 0x0e, 0x14, 0x09,
+	0x35, 0x06, 0x21, 0x07, 0x6b, 0x30, 0xfb, 0x30, 0x88, 0x13, 0xb0, 0x1c, 0xee, 0x7c, 0x3f, 0xa0,
+	0xee, 0x89, 0x34, 0x23, 0xa1, 0x11, 0xbe, 0x0d, 0x25, 0xe1, 0x2e, 0xe0, 0xd0, 0x75, 0x98, 0x75,
+	0xa9, 0x17, 0x58, 0x7e, 0xe8, 0x7f, 0x2e, 0xe5, 0x2f, 0xec, 0x48, 0x68, 0x85, 0xbf, 0x51, 0xa1,
+	0x14, 0x87, 0x46, 0xff, 0x07, 0xe4, 0xf9, 0x86, 0xeb, 0xf7, 0x38, 0x93, 0xbe, 0x61, 0x8f, 0x7a,
+	0x36, 0x03, 0x53, 0x57, 0x33, 0x44, 0xe3, 0x9a, 0x6e, 0xa8, 0x68, 0x79, 0x68, 0x15, 0x34, 0xea,
+	0x0c, 0x92, 0xb6, 0x33, 0xdc, 0xb6, 0x4c, 0x9d, 0x41, 0xdc, 0xf2, 0x06, 0xcc, 0xd9, 0x86, 0xdf,
+	0x3f, 0xa6, 0xae, 0x27, 0x49, 0x8d, 0x8e, 0xb6, 0x63, 0x1c, 0x50, 0xab, 0x25, 0x94, 0x24, 0xb2,
+	0xc2, 0x4d, 0x98, 0x4f, 0x04, 0x8d, 0x36, 0x5e, 0x31, 0x41, 0xd8, 0xad, 0x28, 0xf1, 0x54, 0xc0,
+	0x8f, 0x54, 0x58, 0xe2, 0x58, 0x1d, 0xdf, 0xa5, 0x86, 0x1d, 0x21, 0xde, 0x86, 0x62, 0xff, 0x38,
+	0x70, 0x3e, 0x49, 0x40, 0x9e, 0x3f, 0x0b, 0x79, 0x87, 0x19, 0x49, 0xdc, 0xb8, 0x47, 0x2a, 0xa4,
+	0x99, 0x3f, 0x11, 0xd2, 0x4d, 0x40, 0xfc, 0xdc, 0xef, 0x1b, 0x56, 0x40, 0xbd, 0x90, 0xfd, 0x7f,
+	0x03, 0x58, 0x4c, 0xda, 0x73, 0x0c, 0x9b, 0x72, 0xd6, 0x0b, 0xa4, 0xc0, 0x25, 0x6d, 0xc3, 0xa6,
+	0x78, 0x03, 0x96, 0x12, 0x4e, 0xf2, 0x18, 0x97, 0xa1, 0x24, 0xbc, 0x3e, 0xe5, 0x72, 0x7e, 0x8e,
+	0x02, 0x29, 0x5a, 0x63, 0x53, 0xbc, 0x04, 0x8b, 0x3b, 0x21, 0x4c, 0xb8, 0x1b, 0xbe, 0x25, 0x63,
+	0x90, 0x42, 0x89, 0x56, 0x83, 0xe2, 0x38, 0x86, 0x10, 0x0c, 0xa2, 0x20, 0x3c, 0x8c, 0x40, 0xdb,
+	0xf7, 0xa8, 0xdb, 0xf1, 0x0d, 0x3f, 0x82, 0xfa, 0x5e, 0x85, 0xc5, 0x98, 0x50, 0x42, 0x5d, 0x81,
+	0xb2, 0xe9, 0x1c, 0x51, 0xcf, 0x37, 0x87, 0x4e, 0xcf, 0x35, 0x7c, 0x71, 0x24, 0x95, 0xcc, 0x47,
+	0x52, 0x62, 0xf8, 0x94, 0x9d, 0xda, 0x09, 0xec, 0x5e, 0xc4, 0xa2, 0xba, 0x9a, 0x25, 0x05, 0x27,
+	0xb0, 0x05, 0x79, 0x2c, 0x25, 0x8d, 0x91, 0xd9, 0x4b, 0x21, 0x65, 0x38, 0x92, 0x66, 0x8c, 0xcc,
+	0x66, 0x02, 0x6c, 0x0d, 0x96, 0xdc, 0xc0, 0xa2, 0x69, 0xf3, 0x2c, 0x37, 0x5f, 0x64, 0xaa, 0x84,
+	0x3d, 0xfe, 0x18, 0x96, 0x58, 0xe0, 0xcd, 0xbb, 0xc9, 0xd0, 0xcf, 0xc3, 0x6c, 0xe0, 0x51, 0xb7,
+	0x67, 0x0e, 0xe4, 0x35, 0xe4, 0xd9, 0xb2, 0x39, 0x40, 0xd7, 0x20, 0xcb, 0x3b, 0x03, 0x0b, 0xb3,
+	0xb8, 0x7e, 0x21, 0xbc, 0xec, 0x33, 0x87, 0x27, 0xdc, 0x0c, 0x6f, 0x03, 0x62, 0x2a, 0x2f, 0x89,
+	0xfe, 0x06, 0xe4, 0x3c, 0x26, 0x90, 0x29, 0x77, 0x31, 0x8e, 0x92, 0x8a, 0x84, 0x08, 0x4b, 0xfc,
+	0x9d, 0x0a, 0xba, 0x68, 0x3f, 0xde, 0xd6, 0xd0, 0x8d, 0xd7, 0x8c, 0xf7, 0xba, 0x6b, 0x77, 0x03,
+	0x4a, 0x61, 0x55, 0xf6, 0x3c, 0xea, 0xcb, 0xfa, 0x3d, 0x37, 0xa9, 0x7e, 0x3d, 0x52, 0x0c, 0x4d,
+	0x3b, 0xd4, 0xc7, 0x4d, 0xa8, 0x4d, 0x8d, 0x59, 0x52, 0x71, 0x15, 0xf2, 0x36, 0x37, 0x91, 0x5c,
+	0x94, 0x93, 0xbd, 0x96, 0x48, 0x2d, 0xae, 0xc0, 0x8a, 0x84, 0x0a, 0xdb, 0x6f, 0x98, 0x7b, 0x2d,
+	0x38, 0x7f, 0x46, 0x23, 0xc1, 0xd7, 0x63, 0xad, 0x5c, 0xfd, 0xbd, 0x56, 0x1e, 0x6b, 0xe2, 0x3f,
+	0xaa, 0xb0, 0x90, 0x2a, 0x7d, 0xc6, 0xd5, 0xa1, 0x3b, 0xb4, 0x65, 0x52, 0xc5, 0xd3, 0xa2, 0xcc,
+	0xe4, 0x4d, 0x29, 0x6e, 0x0e, 0xe2, 0x79, 0x33, 0x93, 0xc8, 0x9b, 0xdb, 0x90, 0xe7, 0x35, 0x14,
+	0xb6, 0xbf, 0xc5, 0x04, 0x7d, 0x7b, 0x86, 0xe9, 0x6e, 0x2e, 0xcb, 0x97, 0xad, 0xc4, 0x45, 0xf5,
+	0x81, 0x31, 0xf2, 0xa9, 0x4b, 0xa4, 0x1b, 0xfa, 0x1f, 0xe4, 0x45, 0xeb, 0xa9, 0x64, 0x39, 0xc0,
+	0x7c, 0x08, 0x10, 0xef, 0x4e, 0xd2, 0x04, 0x7f, 0xad, 0x42, 0x4e, 0x84, 0xfe, 0xba, 0x92, 0xa2,
+	0x0a, 0x73, 0xd4, 0xe9, 0x0f, 0x07, 0xa6, 0x73, 0xc4, 0x6b, 0x31, 0x47, 0xa2, 0x35, 0x42, 0xb2,
+	0x46, 0x58, 0xd1, 0x95, 0x64, 0x21, 0x54, 0x60, 0xa5, 0xeb, 0x1a, 0x8e, 0x77, 0x48, 0x5d, 0x1e,
+	0x58, 0x94, 0x01, 0xf8, 0x73, 0x80, 0x31, 0xdf, 0x31, 0x9e, 0xd4, 0xbf, 0xc6, 0xd3, 0x1a, 0xcc,
+	0x7a, 0x86, 0x3d, 0xb2, 0xa2, 0x86, 0x1c, 0x65, 0x54, 0x87, 0x8b, 0x25, 0x53, 0xa1, 0x11, 0xbe,
+	0x05, 0x85, 0x08, 0x9a, 0x45, 0x1e, 0xb5, 0xde, 0x12, 0xe1, 0xdf, 0x68, 0x19, 0x72, 0xbc, 0xb1,
+	0x72, 0x22, 0x4a, 0x44, 0x2c, 0x70, 0x1d, 0xf2, 0x02, 0x6f, 0xac, 0x17, 0xcd, 0x4d, 0x2c, 0x58,
+	0x53, 0x9e, 0xc0, 0x62, 0xd1, 0x1f, 0x53, 0x88, 0xeb, 0x30, 0x9f, 0xa8, 0x89, 0xc4, 0x23, 0xa9,
+	0xbe, 0xd2, 0x23, 0xf9, 0xd5, 0x0c, 0x94, 0x93, 0x99, 0x8c, 0x6e, 0x41, 0xd6, 0x3f, 0x19, 0x89,
+	0x68, 0xca, 0xeb, 0x97, 0x27, 0xe7, 0xbb, 0x5c, 0x76, 0x4f, 0x46, 0x94, 0x70, 0x73, 0xd6, 0xf6,
+	0x45, 0xa5, 0x89, 0xb7, 0x47, 0x24, 0x2f, 0x08, 0x11, 0xeb, 0xfb, 0x8c, 0x9a, 0x63, 0x6a, 0x8d,
+	0xf8, 0xa5, 0x16, 0x08, 0xff, 0x66, 0xb2, 0xc0, 0x31, 0xfd, 0x4a, 0x4e, 0xc8, 0xd8, 0x37, 0x3e,
+	0x01, 0x18, 0x83, 0xa3, 0x22, 0xcc, 0xee, 0xb7, 0xdf, 0x6b, 0xef, 0x3e, 0x68, 0x6b, 0x0a, 0x5b,
+	0xdc, 0xd9, 0xdd, 0x6f, 0x77, 0x1b, 0x44, 0x53, 0x51, 0x01, 0x72, 0xdb, 0xf5, 0xfd, 0xed, 0x86,
+	0x36, 0x83, 0xe6, 0xa1, 0x70, 0xaf, 0xd9, 0xe9, 0xee, 0x6e, 0x93, 0x7a, 0x4b, 0xcb, 0x20, 0x04,
+	0x65, 0xae, 0x19, 0xcb, 0xb2, 0xcc, 0xb5, 0xb3, 0xdf, 0x6a, 0xd5, 0xc9, 0x87, 0x5a, 0x8e, 0x0d,
+	0x54, 0xcd, 0xf6, 0xd6, 0xae, 0x96, 0x47, 0x25, 0x98, 0xeb, 0x74, 0xeb, 0xdd, 0x46, 0xa7, 0xd1,
+	0xd5, 0x66, 0x71, 0x13, 0xf2, 0x62, 0xeb, 0xbf, 0x9d, 0x45, 0xb8, 0x07, 0xa5, 0x38, 0xe5, 0xe8,
+	0x4a, 0x82, 0xd5, 0x08, 0x8e, 0xab, 0x63, 0x2c, 0x86, 0xf9, 0x23, 0xe8, 0x4b, 0xe5, 0x4f, 0x86,
+	0x0b, 0x65, 0xfe, 0x7c, 0xa9, 0x42, 0x79, 0x9c, 0xf6, 0x5b, 0xa6, 0x45, 0xff, 0x89, 0x2e, 0x53,
+	0x85, 0xb9, 0x43, 0xd3, 0xa2, 0x3c, 0x06, 0xb1, 0x5d, 0xb4, 0x9e, 0x58, 0x95, 0x2b, 0xb0, 0x1c,
+	0x56, 0x65, 0xb7, 0x73, 0x77, 0x33, 0xac, 0xc9, 0xff, 0xbe, 0x0b, 0x85, 0xe8, 0x68, 0xec, 0xa6,
+	0x1a, 0xf7, 0xf7, 0xeb, 0x3b, 0x9a, 0xc2, 0x6e, 0xaa, 0xbd, 0xdb, 0xed, 0x89, 0xa5, 0x8a, 0x16,
+	0xa0, 0x48, 0x1a, 0xdb, 0x8d, 0x0f, 0x7a, 0xad, 0x7a, 0xf7, 0xce, 0x3d, 0x6d, 0x86, 0x5d, 0x9d,
+	0x10, 0xb4, 0x77, 0xa5, 0x2c, 0xb3, 0xfe, 0x43, 0x1e, 0xe6, 0xc2, 0xd8, 0x59, 0x76, 0xee, 0x05,
+	0xde, 0x31, 0x5a, 0x9e, 0x34, 0x8d, 0x57, 0xcf, 0xa5, 0xa4, 0xb2, 0x43, 0x28, 0xe8, 0x4d, 0xc8,
+	0xf1, 0x01, 0x0e, 0x4d, 0x1c, 0x88, 0xab, 0x93, 0xc7, 0x5c, 0xac, 0xa0, 0xbb, 0x50, 0x8c, 0x0d,
+	0x7e, 0x53, 0xbc, 0x2f, 0x26, 0xa4, 0xc9, 0x19, 0x11, 0x2b, 0x37, 0x54, 0x74, 0x0f, 0x8a, 0xb1,
+	0xb9, 0x0b, 0x55, 0x13, 0xc9, 0x94, 0x98, 0xe0, 0xc6, 0x58, 0x13, 0x06, 0x35, 0xac, 0xa0, 0x06,
+	0xc0, 0x78, 0xe4, 0x42, 0x17, 0x12, 0xc6, 0xf1, 0xd9, 0xac, 0x5a, 0x9d, 0xa4, 0x8a, 0x60, 0x36,
+	0xa1, 0x10, 0x0d, 0x1c, 0xa8, 0x32, 0x61, 0x06, 0x11, 0x20, 0xd3, 0xa7, 0x13, 0xac, 0xa0, 0x2d,
+	0x28, 0xd5, 0x2d, 0xeb, 0x55, 0x60, 0xaa, 0x71, 0x8d, 0x97, 0xc6, 0xb1, 0xa2, 0xe7, 0x37, 0xfd,
+	0xc6, 0xa3, 0xab, 0xc9, 0xe6, 0x33, 0x6d, 0x70, 0xa9, 0xfe, 0xe7, 0x0f, 0xed, 0xa2, 0xdd, 0xba,
+	0xb0, 0x90, 0x7a, 0xec, 0x91, 0x9e, 0xf2, 0x4e, 0xcd, 0x07, 0xd5, 0xda, 0x54, 0x7d, 0x84, 0xda,
+	0x82, 0x72, 0xf2, 0x71, 0x42, 0xd3, 0xfe, 0x02, 0xaa, 0xd1, 0x6e, 0x53, 0x5e, 0x33, 0x65, 0x95,
+	0xe5, 0x4b, 0x29, 0x5e, 0x55, 0x68, 0xe5, 0x2c, 0x18, 0x2b, 0xf8, 0xea, 0xbf, 0xd2, 0x58, 0xf1,
+	0x1a, 0x64, 0x48, 0x9b, 0x6f, 0x3f, 0x79, 0xae, 0x2b, 0x4f, 0x9f, 0xeb, 0xca, 0xcb, 0xe7, 0xba,
+	0xfa, 0xc5, 0xa9, 0xae, 0x7e, 0x7b, 0xaa, 0xab, 0x8f, 0x4f, 0x75, 0xf5, 0xc9, 0xa9, 0xae, 0xfe,
+	0x7c, 0xaa, 0xab, 0xbf, 0x9c, 0xea, 0xca, 0xcb, 0x53, 0x5d, 0x7d, 0xf4, 0x42, 0x57, 0x9e, 0xbc,
+	0xd0, 0x95, 0xa7, 0x2f, 0x74, 0xe5, 0xa3, 0x7c, 0xdf, 0x32, 0xa9, 0xe3, 0x1f, 0xe4, 0xf9, 0xaf,
+	0xf6, 0xcd, 0xdf, 0x02, 0x00, 0x00, 0xff, 0xff, 0xee, 0xad, 0x00, 0xad, 0xb1, 0x0f, 0x00, 0x00,
 }
 
 func (x MatchType) String() string {
@@ -1419,6 +1747,13 @@ func (x MatchType) String() string {
 }
 func (x WriteRequest_SourceEnum) String() string {
 	s, ok := WriteRequest_SourceEnum_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x MetricMetadata_MetricType) String() string {
+	s, ok := MetricMetadata_MetricType_name[int32(x)]
 	if ok {
 		return s
 	}
@@ -1453,6 +1788,14 @@ func (this *WriteRequest) Equal(that interface{}) bool {
 	}
 	if this.Source != that1.Source {
 		return false
+	}
+	if len(this.Metadata) != len(that1.Metadata) {
+		return false
+	}
+	for i := range this.Metadata {
+		if !this.Metadata[i].Equal(that1.Metadata[i]) {
+			return false
+		}
 	}
 	return true
 }
@@ -1617,6 +1960,14 @@ func (this *QueryStreamResponse) Equal(that interface{}) bool {
 		return this == nil
 	} else if this == nil {
 		return false
+	}
+	if len(this.Chunkseries) != len(that1.Chunkseries) {
+		return false
+	}
+	for i := range this.Chunkseries {
+		if !this.Chunkseries[i].Equal(&that1.Chunkseries[i]) {
+			return false
+		}
 	}
 	if len(this.Timeseries) != len(that1.Timeseries) {
 		return false
@@ -1905,6 +2256,56 @@ func (this *MetricsForLabelMatchersResponse) Equal(that interface{}) bool {
 	}
 	return true
 }
+func (this *MetricsMetadataRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MetricsMetadataRequest)
+	if !ok {
+		that2, ok := that.(MetricsMetadataRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *MetricsMetadataResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MetricsMetadataResponse)
+	if !ok {
+		that2, ok := that.(MetricsMetadataResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Metadata) != len(that1.Metadata) {
+		return false
+	}
+	for i := range this.Metadata {
+		if !this.Metadata[i].Equal(that1.Metadata[i]) {
+			return false
+		}
+	}
+	return true
+}
 func (this *TimeSeriesChunk) Equal(that interface{}) bool {
 	if that == nil {
 		return this == nil
@@ -2122,6 +2523,39 @@ func (this *LabelMatchers) Equal(that interface{}) bool {
 	}
 	return true
 }
+func (this *MetricMetadata) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MetricMetadata)
+	if !ok {
+		that2, ok := that.(MetricMetadata)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Type != that1.Type {
+		return false
+	}
+	if this.MetricName != that1.MetricName {
+		return false
+	}
+	if this.Help != that1.Help {
+		return false
+	}
+	if this.Unit != that1.Unit {
+		return false
+	}
+	return true
+}
 func (this *Metric) Equal(that interface{}) bool {
 	if that == nil {
 		return this == nil
@@ -2181,14 +2615,71 @@ func (this *LabelMatcher) Equal(that interface{}) bool {
 	}
 	return true
 }
+func (this *TimeSeriesFile) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*TimeSeriesFile)
+	if !ok {
+		that2, ok := that.(TimeSeriesFile)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.FromIngesterId != that1.FromIngesterId {
+		return false
+	}
+	if this.UserId != that1.UserId {
+		return false
+	}
+	if this.Filename != that1.Filename {
+		return false
+	}
+	if !bytes.Equal(this.Data, that1.Data) {
+		return false
+	}
+	return true
+}
+func (this *TransferTSDBResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*TransferTSDBResponse)
+	if !ok {
+		that2, ok := that.(TransferTSDBResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
 func (this *WriteRequest) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 6)
+	s := make([]string, 0, 7)
 	s = append(s, "&client.WriteRequest{")
 	s = append(s, "Timeseries: "+fmt.Sprintf("%#v", this.Timeseries)+",\n")
 	s = append(s, "Source: "+fmt.Sprintf("%#v", this.Source)+",\n")
+	if this.Metadata != nil {
+		s = append(s, "Metadata: "+fmt.Sprintf("%#v", this.Metadata)+",\n")
+	}
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -2259,10 +2750,17 @@ func (this *QueryStreamResponse) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 5)
+	s := make([]string, 0, 6)
 	s = append(s, "&client.QueryStreamResponse{")
+	if this.Chunkseries != nil {
+		vs := make([]*TimeSeriesChunk, len(this.Chunkseries))
+		for i := range vs {
+			vs[i] = &this.Chunkseries[i]
+		}
+		s = append(s, "Chunkseries: "+fmt.Sprintf("%#v", vs)+",\n")
+	}
 	if this.Timeseries != nil {
-		vs := make([]*TimeSeriesChunk, len(this.Timeseries))
+		vs := make([]*TimeSeries, len(this.Timeseries))
 		for i := range vs {
 			vs[i] = &this.Timeseries[i]
 		}
@@ -2383,6 +2881,27 @@ func (this *MetricsForLabelMatchersResponse) GoString() string {
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
+func (this *MetricsMetadataRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&client.MetricsMetadataRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *MetricsMetadataResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&client.MetricsMetadataResponse{")
+	if this.Metadata != nil {
+		s = append(s, "Metadata: "+fmt.Sprintf("%#v", this.Metadata)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
 func (this *TimeSeriesChunk) GoString() string {
 	if this == nil {
 		return "nil"
@@ -2475,6 +2994,19 @@ func (this *LabelMatchers) GoString() string {
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
+func (this *MetricMetadata) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&client.MetricMetadata{")
+	s = append(s, "Type: "+fmt.Sprintf("%#v", this.Type)+",\n")
+	s = append(s, "MetricName: "+fmt.Sprintf("%#v", this.MetricName)+",\n")
+	s = append(s, "Help: "+fmt.Sprintf("%#v", this.Help)+",\n")
+	s = append(s, "Unit: "+fmt.Sprintf("%#v", this.Unit)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
 func (this *Metric) GoString() string {
 	if this == nil {
 		return "nil"
@@ -2494,6 +3026,28 @@ func (this *LabelMatcher) GoString() string {
 	s = append(s, "Type: "+fmt.Sprintf("%#v", this.Type)+",\n")
 	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
 	s = append(s, "Value: "+fmt.Sprintf("%#v", this.Value)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *TimeSeriesFile) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&client.TimeSeriesFile{")
+	s = append(s, "FromIngesterId: "+fmt.Sprintf("%#v", this.FromIngesterId)+",\n")
+	s = append(s, "UserId: "+fmt.Sprintf("%#v", this.UserId)+",\n")
+	s = append(s, "Filename: "+fmt.Sprintf("%#v", this.Filename)+",\n")
+	s = append(s, "Data: "+fmt.Sprintf("%#v", this.Data)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *TransferTSDBResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&client.TransferTSDBResponse{")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -2526,8 +3080,11 @@ type IngesterClient interface {
 	UserStats(ctx context.Context, in *UserStatsRequest, opts ...grpc.CallOption) (*UserStatsResponse, error)
 	AllUserStats(ctx context.Context, in *UserStatsRequest, opts ...grpc.CallOption) (*UsersStatsResponse, error)
 	MetricsForLabelMatchers(ctx context.Context, in *MetricsForLabelMatchersRequest, opts ...grpc.CallOption) (*MetricsForLabelMatchersResponse, error)
+	MetricsMetadata(ctx context.Context, in *MetricsMetadataRequest, opts ...grpc.CallOption) (*MetricsMetadataResponse, error)
 	// TransferChunks allows leaving ingester (client) to stream chunks directly to joining ingesters (server).
 	TransferChunks(ctx context.Context, opts ...grpc.CallOption) (Ingester_TransferChunksClient, error)
+	// TransferTSDB transfers all files of a tsdb to a joining ingester
+	TransferTSDB(ctx context.Context, opts ...grpc.CallOption) (Ingester_TransferTSDBClient, error)
 }
 
 type ingesterClient struct {
@@ -2633,6 +3190,15 @@ func (c *ingesterClient) MetricsForLabelMatchers(ctx context.Context, in *Metric
 	return out, nil
 }
 
+func (c *ingesterClient) MetricsMetadata(ctx context.Context, in *MetricsMetadataRequest, opts ...grpc.CallOption) (*MetricsMetadataResponse, error) {
+	out := new(MetricsMetadataResponse)
+	err := c.cc.Invoke(ctx, "/cortex.Ingester/MetricsMetadata", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *ingesterClient) TransferChunks(ctx context.Context, opts ...grpc.CallOption) (Ingester_TransferChunksClient, error) {
 	stream, err := c.cc.NewStream(ctx, &_Ingester_serviceDesc.Streams[1], "/cortex.Ingester/TransferChunks", opts...)
 	if err != nil {
@@ -2667,6 +3233,40 @@ func (x *ingesterTransferChunksClient) CloseAndRecv() (*TransferChunksResponse, 
 	return m, nil
 }
 
+func (c *ingesterClient) TransferTSDB(ctx context.Context, opts ...grpc.CallOption) (Ingester_TransferTSDBClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_Ingester_serviceDesc.Streams[2], "/cortex.Ingester/TransferTSDB", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &ingesterTransferTSDBClient{stream}
+	return x, nil
+}
+
+type Ingester_TransferTSDBClient interface {
+	Send(*TimeSeriesFile) error
+	CloseAndRecv() (*TransferTSDBResponse, error)
+	grpc.ClientStream
+}
+
+type ingesterTransferTSDBClient struct {
+	grpc.ClientStream
+}
+
+func (x *ingesterTransferTSDBClient) Send(m *TimeSeriesFile) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *ingesterTransferTSDBClient) CloseAndRecv() (*TransferTSDBResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(TransferTSDBResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // IngesterServer is the server API for Ingester service.
 type IngesterServer interface {
 	Push(context.Context, *WriteRequest) (*WriteResponse, error)
@@ -2677,8 +3277,49 @@ type IngesterServer interface {
 	UserStats(context.Context, *UserStatsRequest) (*UserStatsResponse, error)
 	AllUserStats(context.Context, *UserStatsRequest) (*UsersStatsResponse, error)
 	MetricsForLabelMatchers(context.Context, *MetricsForLabelMatchersRequest) (*MetricsForLabelMatchersResponse, error)
+	MetricsMetadata(context.Context, *MetricsMetadataRequest) (*MetricsMetadataResponse, error)
 	// TransferChunks allows leaving ingester (client) to stream chunks directly to joining ingesters (server).
 	TransferChunks(Ingester_TransferChunksServer) error
+	// TransferTSDB transfers all files of a tsdb to a joining ingester
+	TransferTSDB(Ingester_TransferTSDBServer) error
+}
+
+// UnimplementedIngesterServer can be embedded to have forward compatible implementations.
+type UnimplementedIngesterServer struct {
+}
+
+func (*UnimplementedIngesterServer) Push(ctx context.Context, req *WriteRequest) (*WriteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Push not implemented")
+}
+func (*UnimplementedIngesterServer) Query(ctx context.Context, req *QueryRequest) (*QueryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Query not implemented")
+}
+func (*UnimplementedIngesterServer) QueryStream(req *QueryRequest, srv Ingester_QueryStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method QueryStream not implemented")
+}
+func (*UnimplementedIngesterServer) LabelValues(ctx context.Context, req *LabelValuesRequest) (*LabelValuesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LabelValues not implemented")
+}
+func (*UnimplementedIngesterServer) LabelNames(ctx context.Context, req *LabelNamesRequest) (*LabelNamesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LabelNames not implemented")
+}
+func (*UnimplementedIngesterServer) UserStats(ctx context.Context, req *UserStatsRequest) (*UserStatsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UserStats not implemented")
+}
+func (*UnimplementedIngesterServer) AllUserStats(ctx context.Context, req *UserStatsRequest) (*UsersStatsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AllUserStats not implemented")
+}
+func (*UnimplementedIngesterServer) MetricsForLabelMatchers(ctx context.Context, req *MetricsForLabelMatchersRequest) (*MetricsForLabelMatchersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MetricsForLabelMatchers not implemented")
+}
+func (*UnimplementedIngesterServer) MetricsMetadata(ctx context.Context, req *MetricsMetadataRequest) (*MetricsMetadataResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MetricsMetadata not implemented")
+}
+func (*UnimplementedIngesterServer) TransferChunks(srv Ingester_TransferChunksServer) error {
+	return status.Errorf(codes.Unimplemented, "method TransferChunks not implemented")
+}
+func (*UnimplementedIngesterServer) TransferTSDB(srv Ingester_TransferTSDBServer) error {
+	return status.Errorf(codes.Unimplemented, "method TransferTSDB not implemented")
 }
 
 func RegisterIngesterServer(s *grpc.Server, srv IngesterServer) {
@@ -2832,6 +3473,24 @@ func _Ingester_MetricsForLabelMatchers_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Ingester_MetricsMetadata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MetricsMetadataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IngesterServer).MetricsMetadata(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cortex.Ingester/MetricsMetadata",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IngesterServer).MetricsMetadata(ctx, req.(*MetricsMetadataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Ingester_TransferChunks_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(IngesterServer).TransferChunks(&ingesterTransferChunksServer{stream})
 }
@@ -2852,6 +3511,32 @@ func (x *ingesterTransferChunksServer) SendAndClose(m *TransferChunksResponse) e
 
 func (x *ingesterTransferChunksServer) Recv() (*TimeSeriesChunk, error) {
 	m := new(TimeSeriesChunk)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _Ingester_TransferTSDB_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(IngesterServer).TransferTSDB(&ingesterTransferTSDBServer{stream})
+}
+
+type Ingester_TransferTSDBServer interface {
+	SendAndClose(*TransferTSDBResponse) error
+	Recv() (*TimeSeriesFile, error)
+	grpc.ServerStream
+}
+
+type ingesterTransferTSDBServer struct {
+	grpc.ServerStream
+}
+
+func (x *ingesterTransferTSDBServer) SendAndClose(m *TransferTSDBResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *ingesterTransferTSDBServer) Recv() (*TimeSeriesFile, error) {
+	m := new(TimeSeriesFile)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -2890,6 +3575,10 @@ var _Ingester_serviceDesc = grpc.ServiceDesc{
 			MethodName: "MetricsForLabelMatchers",
 			Handler:    _Ingester_MetricsForLabelMatchers_Handler,
 		},
+		{
+			MethodName: "MetricsMetadata",
+			Handler:    _Ingester_MetricsMetadata_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -2902,6 +3591,11 @@ var _Ingester_serviceDesc = grpc.ServiceDesc{
 			Handler:       _Ingester_TransferChunks_Handler,
 			ClientStreams: true,
 		},
+		{
+			StreamName:    "TransferTSDB",
+			Handler:       _Ingester_TransferTSDB_Handler,
+			ClientStreams: true,
+		},
 	},
 	Metadata: "cortex.proto",
 }
@@ -2909,7 +3603,7 @@ var _Ingester_serviceDesc = grpc.ServiceDesc{
 func (m *WriteRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2917,34 +3611,55 @@ func (m *WriteRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *WriteRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *WriteRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Timeseries) > 0 {
-		for _, msg := range m.Timeseries {
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintCortex(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+	if len(m.Metadata) > 0 {
+		for iNdEx := len(m.Metadata) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Metadata[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCortex(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0x1a
 		}
 	}
 	if m.Source != 0 {
-		dAtA[i] = 0x10
-		i++
 		i = encodeVarintCortex(dAtA, i, uint64(m.Source))
+		i--
+		dAtA[i] = 0x10
 	}
-	return i, nil
+	if len(m.Timeseries) > 0 {
+		for iNdEx := len(m.Timeseries) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size := m.Timeseries[iNdEx].Size()
+				i -= size
+				if _, err := m.Timeseries[iNdEx].MarshalTo(dAtA[i:]); err != nil {
+					return 0, err
+				}
+				i = encodeVarintCortex(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *WriteResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2952,17 +3667,22 @@ func (m *WriteResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *WriteResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *WriteResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *ReadRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2970,29 +3690,36 @@ func (m *ReadRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ReadRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ReadRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Queries) > 0 {
-		for _, msg := range m.Queries {
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintCortex(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+		for iNdEx := len(m.Queries) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Queries[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCortex(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0xa
 		}
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *ReadResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3000,29 +3727,36 @@ func (m *ReadResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ReadResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ReadResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Results) > 0 {
-		for _, msg := range m.Results {
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintCortex(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+		for iNdEx := len(m.Results) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Results[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCortex(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0xa
 		}
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *QueryRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3030,39 +3764,46 @@ func (m *QueryRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *QueryRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.StartTimestampMs != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintCortex(dAtA, i, uint64(m.StartTimestampMs))
-	}
-	if m.EndTimestampMs != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintCortex(dAtA, i, uint64(m.EndTimestampMs))
-	}
 	if len(m.Matchers) > 0 {
-		for _, msg := range m.Matchers {
-			dAtA[i] = 0x1a
-			i++
-			i = encodeVarintCortex(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+		for iNdEx := len(m.Matchers) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Matchers[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCortex(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0x1a
 		}
 	}
-	return i, nil
+	if m.EndTimestampMs != 0 {
+		i = encodeVarintCortex(dAtA, i, uint64(m.EndTimestampMs))
+		i--
+		dAtA[i] = 0x10
+	}
+	if m.StartTimestampMs != 0 {
+		i = encodeVarintCortex(dAtA, i, uint64(m.StartTimestampMs))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *QueryResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3070,29 +3811,36 @@ func (m *QueryResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *QueryResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Timeseries) > 0 {
-		for _, msg := range m.Timeseries {
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintCortex(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+		for iNdEx := len(m.Timeseries) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Timeseries[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCortex(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0xa
 		}
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *QueryStreamResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3100,29 +3848,50 @@ func (m *QueryStreamResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *QueryStreamResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryStreamResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Timeseries) > 0 {
-		for _, msg := range m.Timeseries {
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintCortex(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+		for iNdEx := len(m.Timeseries) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Timeseries[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCortex(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0x12
 		}
 	}
-	return i, nil
+	if len(m.Chunkseries) > 0 {
+		for iNdEx := len(m.Chunkseries) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Chunkseries[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCortex(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *LabelValuesRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3130,23 +3899,29 @@ func (m *LabelValuesRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *LabelValuesRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LabelValuesRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.LabelName) > 0 {
-		dAtA[i] = 0xa
-		i++
+		i -= len(m.LabelName)
+		copy(dAtA[i:], m.LabelName)
 		i = encodeVarintCortex(dAtA, i, uint64(len(m.LabelName)))
-		i += copy(dAtA[i:], m.LabelName)
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *LabelValuesResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3154,32 +3929,31 @@ func (m *LabelValuesResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *LabelValuesResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LabelValuesResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.LabelValues) > 0 {
-		for _, s := range m.LabelValues {
+		for iNdEx := len(m.LabelValues) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.LabelValues[iNdEx])
+			copy(dAtA[i:], m.LabelValues[iNdEx])
+			i = encodeVarintCortex(dAtA, i, uint64(len(m.LabelValues[iNdEx])))
+			i--
 			dAtA[i] = 0xa
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
-			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
 		}
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *LabelNamesRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3187,17 +3961,22 @@ func (m *LabelNamesRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *LabelNamesRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LabelNamesRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *LabelNamesResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3205,32 +3984,31 @@ func (m *LabelNamesResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *LabelNamesResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LabelNamesResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.LabelNames) > 0 {
-		for _, s := range m.LabelNames {
+		for iNdEx := len(m.LabelNames) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.LabelNames[iNdEx])
+			copy(dAtA[i:], m.LabelNames[iNdEx])
+			i = encodeVarintCortex(dAtA, i, uint64(len(m.LabelNames[iNdEx])))
+			i--
 			dAtA[i] = 0xa
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
-			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
 		}
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *UserStatsRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3238,17 +4016,22 @@ func (m *UserStatsRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *UserStatsRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *UserStatsRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *UserStatsResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3256,40 +4039,45 @@ func (m *UserStatsResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *UserStatsResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *UserStatsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.IngestionRate != 0 {
-		dAtA[i] = 0x9
-		i++
-		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.IngestionRate))))
-		i += 8
-	}
-	if m.NumSeries != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintCortex(dAtA, i, uint64(m.NumSeries))
+	if m.RuleIngestionRate != 0 {
+		i -= 8
+		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.RuleIngestionRate))))
+		i--
+		dAtA[i] = 0x21
 	}
 	if m.ApiIngestionRate != 0 {
-		dAtA[i] = 0x19
-		i++
+		i -= 8
 		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.ApiIngestionRate))))
-		i += 8
+		i--
+		dAtA[i] = 0x19
 	}
-	if m.RuleIngestionRate != 0 {
-		dAtA[i] = 0x21
-		i++
-		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.RuleIngestionRate))))
-		i += 8
+	if m.NumSeries != 0 {
+		i = encodeVarintCortex(dAtA, i, uint64(m.NumSeries))
+		i--
+		dAtA[i] = 0x10
 	}
-	return i, nil
+	if m.IngestionRate != 0 {
+		i -= 8
+		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.IngestionRate))))
+		i--
+		dAtA[i] = 0x9
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *UserIDStatsResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3297,33 +4085,41 @@ func (m *UserIDStatsResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *UserIDStatsResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *UserIDStatsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.UserId) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintCortex(dAtA, i, uint64(len(m.UserId)))
-		i += copy(dAtA[i:], m.UserId)
-	}
 	if m.Data != nil {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintCortex(dAtA, i, uint64(m.Data.Size()))
-		n1, err := m.Data.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Data.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintCortex(dAtA, i, uint64(size))
 		}
-		i += n1
+		i--
+		dAtA[i] = 0x12
 	}
-	return i, nil
+	if len(m.UserId) > 0 {
+		i -= len(m.UserId)
+		copy(dAtA[i:], m.UserId)
+		i = encodeVarintCortex(dAtA, i, uint64(len(m.UserId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *UsersStatsResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3331,29 +4127,36 @@ func (m *UsersStatsResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *UsersStatsResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *UsersStatsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Stats) > 0 {
-		for _, msg := range m.Stats {
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintCortex(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+		for iNdEx := len(m.Stats) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Stats[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCortex(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0xa
 		}
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *MetricsForLabelMatchersRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3361,39 +4164,46 @@ func (m *MetricsForLabelMatchersRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *MetricsForLabelMatchersRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MetricsForLabelMatchersRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.StartTimestampMs != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintCortex(dAtA, i, uint64(m.StartTimestampMs))
-	}
-	if m.EndTimestampMs != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintCortex(dAtA, i, uint64(m.EndTimestampMs))
-	}
 	if len(m.MatchersSet) > 0 {
-		for _, msg := range m.MatchersSet {
-			dAtA[i] = 0x1a
-			i++
-			i = encodeVarintCortex(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+		for iNdEx := len(m.MatchersSet) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.MatchersSet[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCortex(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0x1a
 		}
 	}
-	return i, nil
+	if m.EndTimestampMs != 0 {
+		i = encodeVarintCortex(dAtA, i, uint64(m.EndTimestampMs))
+		i--
+		dAtA[i] = 0x10
+	}
+	if m.StartTimestampMs != 0 {
+		i = encodeVarintCortex(dAtA, i, uint64(m.StartTimestampMs))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *MetricsForLabelMatchersResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3401,29 +4211,96 @@ func (m *MetricsForLabelMatchersResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *MetricsForLabelMatchersResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MetricsForLabelMatchersResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Metric) > 0 {
-		for _, msg := range m.Metric {
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintCortex(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+		for iNdEx := len(m.Metric) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Metric[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCortex(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0xa
 		}
 	}
-	return i, nil
+	return len(dAtA) - i, nil
+}
+
+func (m *MetricsMetadataRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MetricsMetadataRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MetricsMetadataRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
+func (m *MetricsMetadataResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MetricsMetadataResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MetricsMetadataResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Metadata) > 0 {
+		for iNdEx := len(m.Metadata) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Metadata[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCortex(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *TimeSeriesChunk) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3431,53 +4308,64 @@ func (m *TimeSeriesChunk) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TimeSeriesChunk) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *TimeSeriesChunk) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.FromIngesterId) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintCortex(dAtA, i, uint64(len(m.FromIngesterId)))
-		i += copy(dAtA[i:], m.FromIngesterId)
-	}
-	if len(m.UserId) > 0 {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintCortex(dAtA, i, uint64(len(m.UserId)))
-		i += copy(dAtA[i:], m.UserId)
+	if len(m.Chunks) > 0 {
+		for iNdEx := len(m.Chunks) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Chunks[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCortex(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x22
+		}
 	}
 	if len(m.Labels) > 0 {
-		for _, msg := range m.Labels {
+		for iNdEx := len(m.Labels) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size := m.Labels[iNdEx].Size()
+				i -= size
+				if _, err := m.Labels[iNdEx].MarshalTo(dAtA[i:]); err != nil {
+					return 0, err
+				}
+				i = encodeVarintCortex(dAtA, i, uint64(size))
+			}
+			i--
 			dAtA[i] = 0x1a
-			i++
-			i = encodeVarintCortex(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
-			}
-			i += n
 		}
 	}
-	if len(m.Chunks) > 0 {
-		for _, msg := range m.Chunks {
-			dAtA[i] = 0x22
-			i++
-			i = encodeVarintCortex(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
-			}
-			i += n
-		}
+	if len(m.UserId) > 0 {
+		i -= len(m.UserId)
+		copy(dAtA[i:], m.UserId)
+		i = encodeVarintCortex(dAtA, i, uint64(len(m.UserId)))
+		i--
+		dAtA[i] = 0x12
 	}
-	return i, nil
+	if len(m.FromIngesterId) > 0 {
+		i -= len(m.FromIngesterId)
+		copy(dAtA[i:], m.FromIngesterId)
+		i = encodeVarintCortex(dAtA, i, uint64(len(m.FromIngesterId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *Chunk) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3485,38 +4373,44 @@ func (m *Chunk) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *Chunk) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Chunk) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.StartTimestampMs != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintCortex(dAtA, i, uint64(m.StartTimestampMs))
-	}
-	if m.EndTimestampMs != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintCortex(dAtA, i, uint64(m.EndTimestampMs))
+	if len(m.Data) > 0 {
+		i -= len(m.Data)
+		copy(dAtA[i:], m.Data)
+		i = encodeVarintCortex(dAtA, i, uint64(len(m.Data)))
+		i--
+		dAtA[i] = 0x22
 	}
 	if m.Encoding != 0 {
-		dAtA[i] = 0x18
-		i++
 		i = encodeVarintCortex(dAtA, i, uint64(m.Encoding))
+		i--
+		dAtA[i] = 0x18
 	}
-	if len(m.Data) > 0 {
-		dAtA[i] = 0x22
-		i++
-		i = encodeVarintCortex(dAtA, i, uint64(len(m.Data)))
-		i += copy(dAtA[i:], m.Data)
+	if m.EndTimestampMs != 0 {
+		i = encodeVarintCortex(dAtA, i, uint64(m.EndTimestampMs))
+		i--
+		dAtA[i] = 0x10
 	}
-	return i, nil
+	if m.StartTimestampMs != 0 {
+		i = encodeVarintCortex(dAtA, i, uint64(m.StartTimestampMs))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *TransferChunksResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3524,17 +4418,22 @@ func (m *TransferChunksResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TransferChunksResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *TransferChunksResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *TimeSeries) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3542,41 +4441,50 @@ func (m *TimeSeries) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TimeSeries) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *TimeSeries) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Labels) > 0 {
-		for _, msg := range m.Labels {
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintCortex(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
-			}
-			i += n
-		}
-	}
 	if len(m.Samples) > 0 {
-		for _, msg := range m.Samples {
-			dAtA[i] = 0x12
-			i++
-			i = encodeVarintCortex(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+		for iNdEx := len(m.Samples) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Samples[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCortex(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0x12
 		}
 	}
-	return i, nil
+	if len(m.Labels) > 0 {
+		for iNdEx := len(m.Labels) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size := m.Labels[iNdEx].Size()
+				i -= size
+				if _, err := m.Labels[iNdEx].MarshalTo(dAtA[i:]); err != nil {
+					return 0, err
+				}
+				i = encodeVarintCortex(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *LabelPair) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3584,29 +4492,36 @@ func (m *LabelPair) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *LabelPair) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LabelPair) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Name) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintCortex(dAtA, i, uint64(len(m.Name)))
-		i += copy(dAtA[i:], m.Name)
-	}
 	if len(m.Value) > 0 {
-		dAtA[i] = 0x12
-		i++
+		i -= len(m.Value)
+		copy(dAtA[i:], m.Value)
 		i = encodeVarintCortex(dAtA, i, uint64(len(m.Value)))
-		i += copy(dAtA[i:], m.Value)
+		i--
+		dAtA[i] = 0x12
 	}
-	return i, nil
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = encodeVarintCortex(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *Sample) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3614,28 +4529,33 @@ func (m *Sample) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *Sample) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Sample) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Value != 0 {
-		dAtA[i] = 0x9
-		i++
-		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.Value))))
-		i += 8
-	}
 	if m.TimestampMs != 0 {
-		dAtA[i] = 0x10
-		i++
 		i = encodeVarintCortex(dAtA, i, uint64(m.TimestampMs))
+		i--
+		dAtA[i] = 0x10
 	}
-	return i, nil
+	if m.Value != 0 {
+		i -= 8
+		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.Value))))
+		i--
+		dAtA[i] = 0x9
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *LabelMatchers) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3643,29 +4563,85 @@ func (m *LabelMatchers) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *LabelMatchers) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LabelMatchers) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Matchers) > 0 {
-		for _, msg := range m.Matchers {
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintCortex(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+		for iNdEx := len(m.Matchers) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Matchers[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintCortex(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0xa
 		}
 	}
-	return i, nil
+	return len(dAtA) - i, nil
+}
+
+func (m *MetricMetadata) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MetricMetadata) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MetricMetadata) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Unit) > 0 {
+		i -= len(m.Unit)
+		copy(dAtA[i:], m.Unit)
+		i = encodeVarintCortex(dAtA, i, uint64(len(m.Unit)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.Help) > 0 {
+		i -= len(m.Help)
+		copy(dAtA[i:], m.Help)
+		i = encodeVarintCortex(dAtA, i, uint64(len(m.Help)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.MetricName) > 0 {
+		i -= len(m.MetricName)
+		copy(dAtA[i:], m.MetricName)
+		i = encodeVarintCortex(dAtA, i, uint64(len(m.MetricName)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.Type != 0 {
+		i = encodeVarintCortex(dAtA, i, uint64(m.Type))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *Metric) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3673,29 +4649,36 @@ func (m *Metric) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *Metric) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Metric) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Labels) > 0 {
-		for _, msg := range m.Labels {
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintCortex(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+		for iNdEx := len(m.Labels) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size := m.Labels[iNdEx].Size()
+				i -= size
+				if _, err := m.Labels[iNdEx].MarshalTo(dAtA[i:]); err != nil {
+					return 0, err
+				}
+				i = encodeVarintCortex(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0xa
 		}
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *LabelMatcher) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3703,38 +4686,121 @@ func (m *LabelMatcher) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *LabelMatcher) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LabelMatcher) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Type != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintCortex(dAtA, i, uint64(m.Type))
+	if len(m.Value) > 0 {
+		i -= len(m.Value)
+		copy(dAtA[i:], m.Value)
+		i = encodeVarintCortex(dAtA, i, uint64(len(m.Value)))
+		i--
+		dAtA[i] = 0x1a
 	}
 	if len(m.Name) > 0 {
-		dAtA[i] = 0x12
-		i++
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
 		i = encodeVarintCortex(dAtA, i, uint64(len(m.Name)))
-		i += copy(dAtA[i:], m.Name)
+		i--
+		dAtA[i] = 0x12
 	}
-	if len(m.Value) > 0 {
+	if m.Type != 0 {
+		i = encodeVarintCortex(dAtA, i, uint64(m.Type))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *TimeSeriesFile) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *TimeSeriesFile) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *TimeSeriesFile) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Data) > 0 {
+		i -= len(m.Data)
+		copy(dAtA[i:], m.Data)
+		i = encodeVarintCortex(dAtA, i, uint64(len(m.Data)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.Filename) > 0 {
+		i -= len(m.Filename)
+		copy(dAtA[i:], m.Filename)
+		i = encodeVarintCortex(dAtA, i, uint64(len(m.Filename)))
+		i--
 		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintCortex(dAtA, i, uint64(len(m.Value)))
-		i += copy(dAtA[i:], m.Value)
 	}
-	return i, nil
+	if len(m.UserId) > 0 {
+		i -= len(m.UserId)
+		copy(dAtA[i:], m.UserId)
+		i = encodeVarintCortex(dAtA, i, uint64(len(m.UserId)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.FromIngesterId) > 0 {
+		i -= len(m.FromIngesterId)
+		copy(dAtA[i:], m.FromIngesterId)
+		i = encodeVarintCortex(dAtA, i, uint64(len(m.FromIngesterId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *TransferTSDBResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *TransferTSDBResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *TransferTSDBResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
 }
 
 func encodeVarintCortex(dAtA []byte, offset int, v uint64) int {
+	offset -= sovCortex(v)
+	base := offset
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
 	dAtA[offset] = uint8(v)
-	return offset + 1
+	return base
 }
 func (m *WriteRequest) Size() (n int) {
 	if m == nil {
@@ -3750,6 +4816,12 @@ func (m *WriteRequest) Size() (n int) {
 	}
 	if m.Source != 0 {
 		n += 1 + sovCortex(uint64(m.Source))
+	}
+	if len(m.Metadata) > 0 {
+		for _, e := range m.Metadata {
+			l = e.Size()
+			n += 1 + l + sovCortex(uint64(l))
+		}
 	}
 	return n
 }
@@ -3835,6 +4907,12 @@ func (m *QueryStreamResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
+	if len(m.Chunkseries) > 0 {
+		for _, e := range m.Chunkseries {
+			l = e.Size()
+			n += 1 + l + sovCortex(uint64(l))
+		}
+	}
 	if len(m.Timeseries) > 0 {
 		for _, e := range m.Timeseries {
 			l = e.Size()
@@ -3994,6 +5072,30 @@ func (m *MetricsForLabelMatchersResponse) Size() (n int) {
 	return n
 }
 
+func (m *MetricsMetadataRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *MetricsMetadataResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Metadata) > 0 {
+		for _, e := range m.Metadata {
+			l = e.Size()
+			n += 1 + l + sovCortex(uint64(l))
+		}
+	}
+	return n
+}
+
 func (m *TimeSeriesChunk) Size() (n int) {
 	if m == nil {
 		return 0
@@ -4122,6 +5224,30 @@ func (m *LabelMatchers) Size() (n int) {
 	return n
 }
 
+func (m *MetricMetadata) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Type != 0 {
+		n += 1 + sovCortex(uint64(m.Type))
+	}
+	l = len(m.MetricName)
+	if l > 0 {
+		n += 1 + l + sovCortex(uint64(l))
+	}
+	l = len(m.Help)
+	if l > 0 {
+		n += 1 + l + sovCortex(uint64(l))
+	}
+	l = len(m.Unit)
+	if l > 0 {
+		n += 1 + l + sovCortex(uint64(l))
+	}
+	return n
+}
+
 func (m *Metric) Size() (n int) {
 	if m == nil {
 		return 0
@@ -4157,15 +5283,42 @@ func (m *LabelMatcher) Size() (n int) {
 	return n
 }
 
-func sovCortex(x uint64) (n int) {
-	for {
-		n++
-		x >>= 7
-		if x == 0 {
-			break
-		}
+func (m *TimeSeriesFile) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.FromIngesterId)
+	if l > 0 {
+		n += 1 + l + sovCortex(uint64(l))
+	}
+	l = len(m.UserId)
+	if l > 0 {
+		n += 1 + l + sovCortex(uint64(l))
+	}
+	l = len(m.Filename)
+	if l > 0 {
+		n += 1 + l + sovCortex(uint64(l))
+	}
+	l = len(m.Data)
+	if l > 0 {
+		n += 1 + l + sovCortex(uint64(l))
 	}
 	return n
+}
+
+func (m *TransferTSDBResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func sovCortex(x uint64) (n int) {
+	return (math_bits.Len64(x|1) + 6) / 7
 }
 func sozCortex(x uint64) (n int) {
 	return sovCortex(uint64((x << 1) ^ uint64((int64(x) >> 63))))
@@ -4174,9 +5327,15 @@ func (this *WriteRequest) String() string {
 	if this == nil {
 		return "nil"
 	}
+	repeatedStringForMetadata := "[]*MetricMetadata{"
+	for _, f := range this.Metadata {
+		repeatedStringForMetadata += strings.Replace(f.String(), "MetricMetadata", "MetricMetadata", 1) + ","
+	}
+	repeatedStringForMetadata += "}"
 	s := strings.Join([]string{`&WriteRequest{`,
 		`Timeseries:` + fmt.Sprintf("%v", this.Timeseries) + `,`,
 		`Source:` + fmt.Sprintf("%v", this.Source) + `,`,
+		`Metadata:` + repeatedStringForMetadata + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4194,8 +5353,13 @@ func (this *ReadRequest) String() string {
 	if this == nil {
 		return "nil"
 	}
+	repeatedStringForQueries := "[]*QueryRequest{"
+	for _, f := range this.Queries {
+		repeatedStringForQueries += strings.Replace(f.String(), "QueryRequest", "QueryRequest", 1) + ","
+	}
+	repeatedStringForQueries += "}"
 	s := strings.Join([]string{`&ReadRequest{`,
-		`Queries:` + strings.Replace(fmt.Sprintf("%v", this.Queries), "QueryRequest", "QueryRequest", 1) + `,`,
+		`Queries:` + repeatedStringForQueries + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4204,8 +5368,13 @@ func (this *ReadResponse) String() string {
 	if this == nil {
 		return "nil"
 	}
+	repeatedStringForResults := "[]*QueryResponse{"
+	for _, f := range this.Results {
+		repeatedStringForResults += strings.Replace(f.String(), "QueryResponse", "QueryResponse", 1) + ","
+	}
+	repeatedStringForResults += "}"
 	s := strings.Join([]string{`&ReadResponse{`,
-		`Results:` + strings.Replace(fmt.Sprintf("%v", this.Results), "QueryResponse", "QueryResponse", 1) + `,`,
+		`Results:` + repeatedStringForResults + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4214,10 +5383,15 @@ func (this *QueryRequest) String() string {
 	if this == nil {
 		return "nil"
 	}
+	repeatedStringForMatchers := "[]*LabelMatcher{"
+	for _, f := range this.Matchers {
+		repeatedStringForMatchers += strings.Replace(f.String(), "LabelMatcher", "LabelMatcher", 1) + ","
+	}
+	repeatedStringForMatchers += "}"
 	s := strings.Join([]string{`&QueryRequest{`,
 		`StartTimestampMs:` + fmt.Sprintf("%v", this.StartTimestampMs) + `,`,
 		`EndTimestampMs:` + fmt.Sprintf("%v", this.EndTimestampMs) + `,`,
-		`Matchers:` + strings.Replace(fmt.Sprintf("%v", this.Matchers), "LabelMatcher", "LabelMatcher", 1) + `,`,
+		`Matchers:` + repeatedStringForMatchers + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4226,8 +5400,13 @@ func (this *QueryResponse) String() string {
 	if this == nil {
 		return "nil"
 	}
+	repeatedStringForTimeseries := "[]TimeSeries{"
+	for _, f := range this.Timeseries {
+		repeatedStringForTimeseries += strings.Replace(strings.Replace(f.String(), "TimeSeries", "TimeSeries", 1), `&`, ``, 1) + ","
+	}
+	repeatedStringForTimeseries += "}"
 	s := strings.Join([]string{`&QueryResponse{`,
-		`Timeseries:` + strings.Replace(strings.Replace(fmt.Sprintf("%v", this.Timeseries), "TimeSeries", "TimeSeries", 1), `&`, ``, 1) + `,`,
+		`Timeseries:` + repeatedStringForTimeseries + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4236,8 +5415,19 @@ func (this *QueryStreamResponse) String() string {
 	if this == nil {
 		return "nil"
 	}
+	repeatedStringForChunkseries := "[]TimeSeriesChunk{"
+	for _, f := range this.Chunkseries {
+		repeatedStringForChunkseries += strings.Replace(strings.Replace(f.String(), "TimeSeriesChunk", "TimeSeriesChunk", 1), `&`, ``, 1) + ","
+	}
+	repeatedStringForChunkseries += "}"
+	repeatedStringForTimeseries := "[]TimeSeries{"
+	for _, f := range this.Timeseries {
+		repeatedStringForTimeseries += strings.Replace(strings.Replace(f.String(), "TimeSeries", "TimeSeries", 1), `&`, ``, 1) + ","
+	}
+	repeatedStringForTimeseries += "}"
 	s := strings.Join([]string{`&QueryStreamResponse{`,
-		`Timeseries:` + strings.Replace(strings.Replace(fmt.Sprintf("%v", this.Timeseries), "TimeSeriesChunk", "TimeSeriesChunk", 1), `&`, ``, 1) + `,`,
+		`Chunkseries:` + repeatedStringForChunkseries + `,`,
+		`Timeseries:` + repeatedStringForTimeseries + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4309,7 +5499,7 @@ func (this *UserIDStatsResponse) String() string {
 	}
 	s := strings.Join([]string{`&UserIDStatsResponse{`,
 		`UserId:` + fmt.Sprintf("%v", this.UserId) + `,`,
-		`Data:` + strings.Replace(fmt.Sprintf("%v", this.Data), "UserStatsResponse", "UserStatsResponse", 1) + `,`,
+		`Data:` + strings.Replace(this.Data.String(), "UserStatsResponse", "UserStatsResponse", 1) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4318,8 +5508,13 @@ func (this *UsersStatsResponse) String() string {
 	if this == nil {
 		return "nil"
 	}
+	repeatedStringForStats := "[]*UserIDStatsResponse{"
+	for _, f := range this.Stats {
+		repeatedStringForStats += strings.Replace(f.String(), "UserIDStatsResponse", "UserIDStatsResponse", 1) + ","
+	}
+	repeatedStringForStats += "}"
 	s := strings.Join([]string{`&UsersStatsResponse{`,
-		`Stats:` + strings.Replace(fmt.Sprintf("%v", this.Stats), "UserIDStatsResponse", "UserIDStatsResponse", 1) + `,`,
+		`Stats:` + repeatedStringForStats + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4328,10 +5523,15 @@ func (this *MetricsForLabelMatchersRequest) String() string {
 	if this == nil {
 		return "nil"
 	}
+	repeatedStringForMatchersSet := "[]*LabelMatchers{"
+	for _, f := range this.MatchersSet {
+		repeatedStringForMatchersSet += strings.Replace(f.String(), "LabelMatchers", "LabelMatchers", 1) + ","
+	}
+	repeatedStringForMatchersSet += "}"
 	s := strings.Join([]string{`&MetricsForLabelMatchersRequest{`,
 		`StartTimestampMs:` + fmt.Sprintf("%v", this.StartTimestampMs) + `,`,
 		`EndTimestampMs:` + fmt.Sprintf("%v", this.EndTimestampMs) + `,`,
-		`MatchersSet:` + strings.Replace(fmt.Sprintf("%v", this.MatchersSet), "LabelMatchers", "LabelMatchers", 1) + `,`,
+		`MatchersSet:` + repeatedStringForMatchersSet + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4340,8 +5540,37 @@ func (this *MetricsForLabelMatchersResponse) String() string {
 	if this == nil {
 		return "nil"
 	}
+	repeatedStringForMetric := "[]*Metric{"
+	for _, f := range this.Metric {
+		repeatedStringForMetric += strings.Replace(f.String(), "Metric", "Metric", 1) + ","
+	}
+	repeatedStringForMetric += "}"
 	s := strings.Join([]string{`&MetricsForLabelMatchersResponse{`,
-		`Metric:` + strings.Replace(fmt.Sprintf("%v", this.Metric), "Metric", "Metric", 1) + `,`,
+		`Metric:` + repeatedStringForMetric + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MetricsMetadataRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&MetricsMetadataRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MetricsMetadataResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForMetadata := "[]*MetricMetadata{"
+	for _, f := range this.Metadata {
+		repeatedStringForMetadata += strings.Replace(f.String(), "MetricMetadata", "MetricMetadata", 1) + ","
+	}
+	repeatedStringForMetadata += "}"
+	s := strings.Join([]string{`&MetricsMetadataResponse{`,
+		`Metadata:` + repeatedStringForMetadata + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4350,11 +5579,16 @@ func (this *TimeSeriesChunk) String() string {
 	if this == nil {
 		return "nil"
 	}
+	repeatedStringForChunks := "[]Chunk{"
+	for _, f := range this.Chunks {
+		repeatedStringForChunks += strings.Replace(strings.Replace(f.String(), "Chunk", "Chunk", 1), `&`, ``, 1) + ","
+	}
+	repeatedStringForChunks += "}"
 	s := strings.Join([]string{`&TimeSeriesChunk{`,
 		`FromIngesterId:` + fmt.Sprintf("%v", this.FromIngesterId) + `,`,
 		`UserId:` + fmt.Sprintf("%v", this.UserId) + `,`,
 		`Labels:` + fmt.Sprintf("%v", this.Labels) + `,`,
-		`Chunks:` + strings.Replace(strings.Replace(fmt.Sprintf("%v", this.Chunks), "Chunk", "Chunk", 1), `&`, ``, 1) + `,`,
+		`Chunks:` + repeatedStringForChunks + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4385,9 +5619,14 @@ func (this *TimeSeries) String() string {
 	if this == nil {
 		return "nil"
 	}
+	repeatedStringForSamples := "[]Sample{"
+	for _, f := range this.Samples {
+		repeatedStringForSamples += strings.Replace(strings.Replace(f.String(), "Sample", "Sample", 1), `&`, ``, 1) + ","
+	}
+	repeatedStringForSamples += "}"
 	s := strings.Join([]string{`&TimeSeries{`,
 		`Labels:` + fmt.Sprintf("%v", this.Labels) + `,`,
-		`Samples:` + strings.Replace(strings.Replace(fmt.Sprintf("%v", this.Samples), "Sample", "Sample", 1), `&`, ``, 1) + `,`,
+		`Samples:` + repeatedStringForSamples + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4418,8 +5657,26 @@ func (this *LabelMatchers) String() string {
 	if this == nil {
 		return "nil"
 	}
+	repeatedStringForMatchers := "[]*LabelMatcher{"
+	for _, f := range this.Matchers {
+		repeatedStringForMatchers += strings.Replace(f.String(), "LabelMatcher", "LabelMatcher", 1) + ","
+	}
+	repeatedStringForMatchers += "}"
 	s := strings.Join([]string{`&LabelMatchers{`,
-		`Matchers:` + strings.Replace(fmt.Sprintf("%v", this.Matchers), "LabelMatcher", "LabelMatcher", 1) + `,`,
+		`Matchers:` + repeatedStringForMatchers + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MetricMetadata) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&MetricMetadata{`,
+		`Type:` + fmt.Sprintf("%v", this.Type) + `,`,
+		`MetricName:` + fmt.Sprintf("%v", this.MetricName) + `,`,
+		`Help:` + fmt.Sprintf("%v", this.Help) + `,`,
+		`Unit:` + fmt.Sprintf("%v", this.Unit) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4442,6 +5699,28 @@ func (this *LabelMatcher) String() string {
 		`Type:` + fmt.Sprintf("%v", this.Type) + `,`,
 		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
 		`Value:` + fmt.Sprintf("%v", this.Value) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *TimeSeriesFile) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&TimeSeriesFile{`,
+		`FromIngesterId:` + fmt.Sprintf("%v", this.FromIngesterId) + `,`,
+		`UserId:` + fmt.Sprintf("%v", this.UserId) + `,`,
+		`Filename:` + fmt.Sprintf("%v", this.Filename) + `,`,
+		`Data:` + fmt.Sprintf("%v", this.Data) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *TransferTSDBResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&TransferTSDBResponse{`,
 		`}`,
 	}, "")
 	return s
@@ -4536,6 +5815,40 @@ func (m *WriteRequest) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Metadata", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCortex
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthCortex
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Metadata = append(m.Metadata, &MetricMetadata{})
+			if err := m.Metadata[len(m.Metadata)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipCortex(dAtA[iNdEx:])
@@ -5030,6 +6343,40 @@ func (m *QueryStreamResponse) Unmarshal(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Chunkseries", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCortex
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthCortex
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Chunkseries = append(m.Chunkseries, TimeSeriesChunk{})
+			if err := m.Chunkseries[len(m.Chunkseries)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Timeseries", wireType)
 			}
 			var msglen int
@@ -5057,7 +6404,7 @@ func (m *QueryStreamResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Timeseries = append(m.Timeseries, TimeSeriesChunk{})
+			m.Timeseries = append(m.Timeseries, TimeSeries{})
 			if err := m.Timeseries[len(m.Timeseries)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -5972,6 +7319,146 @@ func (m *MetricsForLabelMatchersResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
+func (m *MetricsMetadataRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCortex
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MetricsMetadataRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MetricsMetadataRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCortex(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MetricsMetadataResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCortex
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MetricsMetadataResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MetricsMetadataResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Metadata", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCortex
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthCortex
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Metadata = append(m.Metadata, &MetricMetadata{})
+			if err := m.Metadata[len(m.Metadata)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCortex(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
 func (m *TimeSeriesChunk) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -6766,6 +8253,174 @@ func (m *LabelMatchers) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
+func (m *MetricMetadata) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCortex
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MetricMetadata: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MetricMetadata: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Type", wireType)
+			}
+			m.Type = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCortex
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Type |= MetricMetadata_MetricType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MetricName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCortex
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCortex
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.MetricName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Help", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCortex
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCortex
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Help = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Unit", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCortex
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCortex
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Unit = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCortex(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
 func (m *Metric) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -6965,6 +8620,242 @@ func (m *LabelMatcher) Unmarshal(dAtA []byte) error {
 			}
 			m.Value = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCortex(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *TimeSeriesFile) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCortex
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: TimeSeriesFile: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: TimeSeriesFile: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field FromIngesterId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCortex
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCortex
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.FromIngesterId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UserId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCortex
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCortex
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.UserId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Filename", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCortex
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCortex
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Filename = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Data", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCortex
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthCortex
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Data = append(m.Data[:0], dAtA[iNdEx:postIndex]...)
+			if m.Data == nil {
+				m.Data = []byte{}
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCortex(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthCortex
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *TransferTSDBResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCortex
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: TransferTSDBResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: TransferTSDBResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
 		default:
 			iNdEx = preIndex
 			skippy, err := skipCortex(dAtA[iNdEx:])

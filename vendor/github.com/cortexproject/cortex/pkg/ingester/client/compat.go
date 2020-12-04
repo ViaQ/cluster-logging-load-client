@@ -12,32 +12,27 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/pkg/textparse"
 
 	"github.com/cortexproject/cortex/pkg/util"
 )
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
-// ToWriteRequest converts an array of samples into a WriteRequest proto.
-func ToWriteRequest(samples []model.Sample, source WriteRequest_SourceEnum) *WriteRequest {
+// ToWriteRequest converts matched slices of Labels, Samples and Metadata into a WriteRequest proto.
+// It gets timeseries from the pool, so ReuseSlice() should be called when done.
+func ToWriteRequest(lbls []labels.Labels, samples []Sample, metadata []*MetricMetadata, source WriteRequest_SourceEnum) *WriteRequest {
 	req := &WriteRequest{
-		Timeseries: make([]PreallocTimeseries, 0, len(samples)),
+		Timeseries: slicePool.Get().([]PreallocTimeseries),
+		Metadata:   metadata,
 		Source:     source,
 	}
 
-	for _, s := range samples {
-		ts := PreallocTimeseries{
-			TimeSeries: TimeSeries{
-				Labels: FromMetricsToLabelAdapters(s.Metric),
-				Samples: []Sample{
-					{
-						Value:       float64(s.Value),
-						TimestampMs: int64(s.Timestamp),
-					},
-				},
-			},
-		}
-		req.Timeseries = append(req.Timeseries, ts)
+	for i, s := range samples {
+		ts := timeSeriesPool.Get().(*TimeSeries)
+		ts.Labels = append(ts.Labels, FromLabelsToLabelAdapters(lbls[i])...)
+		ts.Samples = append(ts.Samples, s)
+		req.Timeseries = append(req.Timeseries, PreallocTimeseries{TimeSeries: ts})
 	}
 
 	return req
@@ -144,6 +139,31 @@ func FromMetricsForLabelMatchersResponse(resp *MetricsForLabelMatchersResponse) 
 	return metrics
 }
 
+// MetricMetadataMetricTypeToMetricType converts a metric type from our internal client
+// to a Prometheus one.
+func MetricMetadataMetricTypeToMetricType(mt MetricMetadata_MetricType) textparse.MetricType {
+	switch mt {
+	case UNKNOWN:
+		return textparse.MetricTypeUnknown
+	case COUNTER:
+		return textparse.MetricTypeCounter
+	case GAUGE:
+		return textparse.MetricTypeGauge
+	case HISTOGRAM:
+		return textparse.MetricTypeHistogram
+	case GAUGEHISTOGRAM:
+		return textparse.MetricTypeGaugeHistogram
+	case SUMMARY:
+		return textparse.MetricTypeSummary
+	case INFO:
+		return textparse.MetricTypeInfo
+	case STATESET:
+		return textparse.MetricTypeStateset
+	default:
+		return textparse.MetricTypeUnknown
+	}
+}
+
 func toLabelMatchers(matchers []*labels.Matcher) ([]*LabelMatcher, error) {
 	result := make([]*LabelMatcher, 0, len(matchers))
 	for _, matcher := range matchers {
@@ -197,14 +217,52 @@ func fromLabelMatchers(matchers []*LabelMatcher) ([]*labels.Matcher, error) {
 // FromLabelAdaptersToLabels casts []LabelAdapter to labels.Labels.
 // It uses unsafe, but as LabelAdapter == labels.Label this should be safe.
 // This allows us to use labels.Labels directly in protos.
+//
+// Note: while resulting labels.Labels is supposedly sorted, this function
+// doesn't enforce that. If input is not sorted, output will be wrong.
 func FromLabelAdaptersToLabels(ls []LabelAdapter) labels.Labels {
 	return *(*labels.Labels)(unsafe.Pointer(&ls))
 }
 
-// FromLabelsToLabelAdapaters casts labels.Labels to []LabelAdapter.
+// FromLabelAdaptersToLabelsWithCopy converts []LabelAdapter to labels.Labels.
+// Do NOT use unsafe to convert between data types because this function may
+// get in input labels whose data structure is reused.
+func FromLabelAdaptersToLabelsWithCopy(input []LabelAdapter) labels.Labels {
+	result := make(labels.Labels, len(input))
+
+	size := 0
+	for _, l := range input {
+		size += len(l.Name)
+		size += len(l.Value)
+	}
+
+	// Copy all strings into the buffer, and use 'yoloString' to convert buffer
+	// slices to strings.
+	buf := make([]byte, size)
+
+	for i, l := range input {
+		result[i].Name, buf = copyStringToBuffer(l.Name, buf)
+		result[i].Value, buf = copyStringToBuffer(l.Value, buf)
+	}
+	return result
+}
+
+// Copies string to buffer (which must be big enough), and converts buffer slice containing
+// the string copy into new string.
+func copyStringToBuffer(in string, buf []byte) (string, []byte) {
+	l := len(in)
+	c := copy(buf, in)
+	if c != l {
+		panic("not copied full string")
+	}
+
+	return yoloString(buf[0:l]), buf[l:]
+}
+
+// FromLabelsToLabelAdapters casts labels.Labels to []LabelAdapter.
 // It uses unsafe, but as LabelAdapter == labels.Label this should be safe.
 // This allows us to use labels.Labels directly in protos.
-func FromLabelsToLabelAdapaters(ls labels.Labels) []LabelAdapter {
+func FromLabelsToLabelAdapters(ls labels.Labels) []LabelAdapter {
 	return *(*[]LabelAdapter)(unsafe.Pointer(&ls))
 }
 
