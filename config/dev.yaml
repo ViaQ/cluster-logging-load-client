@@ -1,0 +1,4 @@
+# query is a list of queries that will be executed in the benchmark
+query:
+  - '{ "query": { "range": { "created_at": { "time_zone": "UTC", "gte": "now-1d/d", "lt": "now" } } } }'
+  - '{ "query": { "range": { "created_at": { "time_zone": "UTC", "gte": "now-1h/h", "lt": "now" } } } }'

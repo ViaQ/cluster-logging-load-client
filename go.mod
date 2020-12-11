@@ -1,21 +1,26 @@
 module github.com/cyriltovena/logger
 
-go 1.12
+go 1.14
 
 require (
 	github.com/cenkalti/backoff/v4 v4.1.0
-	github.com/cortexproject/cortex v0.1.0-rc.0.0.20190825121948-934998160dbe
-	github.com/dustin/go-humanize v1.0.0
+	github.com/cortexproject/cortex v1.2.1-0.20200803161316-7014ff11ed70
 	github.com/elastic/go-elasticsearch/v6 v6.8.10
-	github.com/elastic/go-elasticsearch/v8 v8.0.0-20201104130540-2e1f801663c6 // indirect
-	github.com/go-kit/kit v0.9.0 // indirect
 	github.com/gogo/googleapis v1.2.0 // indirect
 	github.com/gogo/status v1.1.0 // indirect
-	github.com/gorilla/mux v1.7.3 // indirect
-	github.com/grafana/loki v0.3.0
-	github.com/opentracing-contrib/go-stdlib v0.0.0-20190519235532-cf7a6c988dc9 // indirect
-	github.com/prometheus/common v0.4.1
-	github.com/stretchr/testify v1.4.0 // indirect
-	github.com/weaveworks/common v0.0.0-20190822150010-afb9996716e4
-	golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7 // indirect
+	github.com/google/go-cmp v0.5.2 // indirect
+	github.com/grafana/loki v1.6.1
+	github.com/mitchellh/go-homedir v1.1.0
+	github.com/prometheus/common v0.10.0
+	github.com/spf13/cobra v1.1.1
+	github.com/spf13/viper v1.7.0
+	github.com/weaveworks/common v0.0.0-20200625145055-4b1847531bc9
+	golang.org/x/sys v0.0.0-20200828194041-157a740278f4 // indirect
+	golang.org/x/text v0.3.3 // indirect
+	golang.org/x/tools v0.0.0-20200910222312-571a207697e7 // indirect
+	google.golang.org/genproto v0.0.0-20200911024640-645f7a48b24f // indirect
+	google.golang.org/grpc v1.31.1 // indirect
+	google.golang.org/protobuf v1.25.0 // indirect
 )
+
+replace github.com/coreos/go-systemd => github.com/coreos/go-systemd/v22 v22.0.0
