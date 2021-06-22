@@ -1,35 +1,40 @@
-PHONY: all build test clean build-image push-image
+PHONY: all build test clean build-image deploy undeploy push-image run-es
 .DEFAULT_GOAL := all
 
-IMAGE_PREFIX ?= ctovena
+include .bingo/Variables.mk
+
+IMAGE_PREFIX ?= quay.io/openshift-logging
 IMAGE_TAG := 0.1
 ES_CONTAINER_NAME=elasticsearch
 ES_IMAGE_TAG=elasticsearch:6.8.12
 
 all: test build-image
 
-build:
-	go build -o logger -v main.go es_bulk_indexer.go
+lint: $(GOLINT)
+	 $(GOLINT) main.go
 
-test:
-	go test -v ./...
+build: lint
+	go build -o logger -v main.go
+
+test: lint
+	go test -v loadclient/*.go
 
 clean:
 	rm -f ./logger
 	go clean ./...
 
 build-image:
-	docker build -t $(IMAGE_PREFIX)/logger .
-	docker tag $(IMAGE_PREFIX)/logger $(IMAGE_PREFIX)/logger:$(IMAGE_TAG)
+	docker build -t $(IMAGE_PREFIX)/cluster-logging-load-client .
+	docker tag $(IMAGE_PREFIX)/cluster-logging-load-client $(IMAGE_PREFIX)/cluster-logging-load-client:$(IMAGE_TAG)
 
 push-image:
-	docker push $(IMAGE_PREFIX)/logger:$(IMAGE_TAG)
-	docker push $(IMAGE_PREFIX)/logger:latest
+	docker push $(IMAGE_PREFIX)/cluster-logging-load-client:$(IMAGE_TAG)
+	docker push $(IMAGE_PREFIX)/cluster-logging-load-client:latest
 
 deploy:
 	kubectl apply -f deployment.yaml
 
-delete:
+undeploy:
 	kubectl delete -f deployment.yaml
 
 run-es:
