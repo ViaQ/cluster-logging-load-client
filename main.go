@@ -1,36 +1,23 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
-	"log"
-	"math/rand"
-	"net/url"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
-
-	"github.com/cortexproject/cortex/pkg/util"
-	"github.com/cortexproject/cortex/pkg/util/flagext"
-	"github.com/grafana/loki/pkg/promtail/client"
-	homedir "github.com/mitchellh/go-homedir"
-	"github.com/prometheus/common/model"
+	"github.com/ViaQ/cluster-logging-load-client/loadclient"
+	"github.com/mitchellh/go-homedir"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/weaveworks/common/logging"
-	"github.com/weaveworks/common/server"
+	"math/rand"
+	"os"
+	"time"
 )
 
-var (
-	cfgFile    string
-	apiURL     string
-	logPerSec  int64
-	remoteType string
-	stopC      = make(chan os.Signal)
-)
+var opt = loadclient.Options{}
+var cfgFile string
+var logLevel string
 
-// rootCmd represents the base command when called without any subcommands
+// rootCmd represents the root command
 var rootCmd = &cobra.Command{
 	Use:   "logger",
 	Short: "A log benchmark tool",
@@ -39,9 +26,10 @@ var rootCmd = &cobra.Command{
 // generateCmd represents the generate command
 var generateCmd = &cobra.Command{
 	Use:   "generate",
-	Short: "send randomly generated log to destination",
+	Short: "send randomly generated log lines to Destination",
 	Run: func(cmd *cobra.Command, args []string) {
-		generateLog()
+		logConfig()
+		loadclient.GenerateLog(opt)
 	},
 }
 
@@ -54,25 +42,35 @@ var queryCmd = &cobra.Command{
 		if len(q) == 0 {
 			log.Fatal("Missing query in the config file")
 		}
-		queryLog(q)
+		logConfig()
+		loadclient.QueryLog(q,opt)
 	},
 }
 
+func logConfig() {
+	configAsJSON, _ := json.MarshalIndent(opt, "", "\t")
+	log.Infof("configuration:\n%s\n", configAsJSON)
+}
+
+
 func init() {
-	lvl := logging.Level{}
-	if err := lvl.Set("debug"); err != nil {
-		panic(err)
-	}
-	util.InitLogger(&server.Config{LogLevel: lvl})
-
-	signal.Notify(stopC, os.Interrupt, syscall.SIGTERM)
-
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/logger.yaml)")
-	rootCmd.PersistentFlags().StringVar(&apiURL, "url", "", "send log via loki api using the provided url (e.g http://localhost:3100/api/prom/push)")
-	rootCmd.PersistentFlags().Int64Var(&logPerSec, "logps", 500, "The total amount of log per second to generate.(default 500)")
-	rootCmd.PersistentFlags().StringVar(&remoteType, "remote-type", "loki", "Type of the remote destination: loki, elasticsearch. (default loki)")
+	rootCmd.PersistentFlags().IntVar(&opt.Threads, "threads", 1, "Number of threads.(default 1)")
+	rootCmd.PersistentFlags().IntVar(&opt.LogLinesPerSec, "log-lines-rate", 1, "The total amount of log lines per thread per second to generate.(default 1)")
+	rootCmd.PersistentFlags().StringVar(&opt.Source, "source", "simple", "Log lines Source: simple, application, synthetic. (default simple)")
+	rootCmd.PersistentFlags().StringVar(&opt.Destination, "destination", "stdout", "Log Destination: loki, elasticsearch, stdout, file. (default stdout)")
+	rootCmd.PersistentFlags().IntVar(&opt.TotalLogLines, "totalLogLines", 0, "Total number of log lines per thread (default 0 - infinite)")
+
+	rootCmd.PersistentFlags().StringVar(&opt.LogFormat, "output-format", "default", "The output format: default, crio (mimic CRIO output), csv")
+	rootCmd.PersistentFlags().IntVar(&opt.SyntheticPayloadSize, "synthetic-payload-size", 100, "Payload length [int] (default = 100)")
+	rootCmd.PersistentFlags().StringVar(&opt.OutputFile, "file", "output", "The file to output (default: output)")
+	rootCmd.PersistentFlags().StringVar(&opt.DestinationAPIURL, "destination-url", "", "send logs via api using the provided url (e.g http://localhost:3100/api/prom/push)")
+	rootCmd.PersistentFlags().StringVar(&opt.Loki.TenantID, "loki-tenant-ID", "fake", "Loki tenantID (default = fake)")
+	rootCmd.PersistentFlags().StringVar(&opt.Loki.Labels, "loki-labels", "random", "Loki labels: none,host,random (default = random)")
+
+	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "error", "Log level: debug, info, warning, error (default = error)")
 
 	rootCmd.AddCommand(generateCmd)
 	rootCmd.AddCommand(queryCmd)
@@ -102,177 +100,21 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
-}
+
+	ll, err := log.ParseLevel(logLevel)
+	if err != nil {
+		ll = log.ErrorLevel
+	}
+	log.SetLevel(ll)
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp: true,
+	})}
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-}
-
-func queryLog(queries []string) {
-	if apiURL != "" {
-		switch remoteType {
-		case "loki":
-			fmt.Println("Query to loki: TO BE IMPLEMENTED")
-		case "elasticsearch":
-			fmt.Println("Query es")
-			logQueryES(apiURL, queries)
-		default:
-			fmt.Printf("Unsupported remote type: %s\n", remoteType)
-		}
-		return
-	}
-}
-
-func generateLog() {
-	host, err := os.Hostname()
-	if err != nil {
-		panic(err)
-	}
-
-	if apiURL != "" {
-		switch remoteType {
-		case "loki":
-			logViaAPI(apiURL, host)
-		case "elasticsearch":
-			fmt.Println("Sending logging to es")
-			logViaEsCli(apiURL, host)
-		default:
-			fmt.Printf("Unsupported remote type: %s\n", remoteType)
-		}
-		return
-	}
-
-	ticker := time.NewTicker(time.Second / time.Duration(logPerSec))
-	for {
-		select {
-		case <-stopC:
-			ticker.Stop()
-			return
-		case <-ticker.C:
-			var out io.Writer
-			var stream string
-			switch rand.Intn(2) {
-			case 1:
-				out = os.Stderr
-				stream = "stderr"
-			default:
-				out = os.Stdout
-				stream = "stdout"
-			}
-			fmt.Fprintf(out, "ts=%s stream=%s host=%s lvl=%s msg=%s \n", time.Now().Format(time.RFC3339Nano), stream, host, randLevel(), randomLog())
-		}
-	}
-}
-
-func logViaAPI(apiURL string, hostname string) {
-	u, err := url.Parse(apiURL)
-	if err != nil {
-		panic(err)
-	}
-	c, err := client.New(client.Config{
-		BatchWait: 0,
-		BatchSize: 100,
-		Timeout:   time.Second * 30,
-		BackoffConfig: util.BackoffConfig{
-			MinBackoff: time.Second * 1,
-			MaxBackoff: time.Second * 5,
-			MaxRetries: 5,
-		},
-		URL: flagext.URLValue{URL: u},
-	}, util.Logger)
-	if err != nil {
-		panic(err)
-	}
-	defer c.Stop()
-
-	ticker := time.NewTicker(time.Second / time.Duration(logPerSec))
-	defer ticker.Stop()
-	for {
-		select {
-		case <-stopC:
-			ticker.Stop()
-			return
-		case <-ticker.C:
-			_ = c.Handle(
-				model.LabelSet{
-					"hostname":  model.LabelValue(hostname),
-					"service":   randService(),
-					"level":     randLevel(),
-					"component": randComponent(),
-				}, time.Now(), randomLog())
-		}
-	}
-}
-
-func randomLog() string {
-	return loglines[rand.Intn(len(loglines))]
-}
-
-func randLevel() model.LabelValue {
-	return levels[rand.Intn(4)]
-}
-
-func randComponent() model.LabelValue {
-	return components[rand.Intn(5)]
-
-}
-
-func randService() model.LabelValue {
-	return services[rand.Intn(6)]
-}
-
-var loglines = []string{
-	"failing to cook potatoes",
-	"successfully launched a car in space",
-	"we got here",
-	"panic: could not read the manual",
-	"error while reading floppy disk",
-	"failed to reach the cloud, try again on a rainy day",
-	"failed to get an error message",
-	"You're screwed !",
-	"Oups I did it again",
-	"a chicken died during processing",
-	"sorry the server is not in a mood",
-	"Stupidity made this error, not me",
-	"random error happened during compression",
-	"too many foobar variable",
-	"cannot over-write a locked variable.",
-	"foo insists on strongly-typed programming languages",
-	"John Doe solved the Travelling Salesman problem in O(1) time. Here's the pseudo-code: Break salesman into N pieces. Kick each piece to a different city.",
-	"infinite loop succeeded in less than 3 seconds",
-	"could not compute the last digit of PI",
-	"OS not found try installing one",
-	"container sinked in whales",
-	"Don’t use beef stew as a computer password. It’s not stroganoff.",
-	"I used stack overflow to fix this bug",
-	"try googling this error message if it appears again",
-	"change stuff and see what happens",
-	"panic: this should never happen",
-}
-
-var levels = []model.LabelValue{
-	"info",
-	"warn",
-	"debug",
-	"error",
-}
-
-var components = []model.LabelValue{
-	"devopsend",
-	"fullstackend",
-	"frontend",
-	"everything-else",
-	"backend",
-}
-
-var services = []model.LabelValue{
-	"potatoes-cart",
-	"phishing",
-	"stateless-database",
-	"random-policies-generator",
-	"cookie-jar",
-	"distributed-unicorn",
 }

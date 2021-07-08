@@ -16,5 +16,5 @@ spec:
     spec:
       containers:
       - name: logger
-        image: ctovena/logger:0.1
+        image: quay.io/openshift-logging/logger:0.1
         imagePullPolicy: Never
