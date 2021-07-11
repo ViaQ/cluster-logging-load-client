@@ -1,12 +1,13 @@
 package loadclient
 
 type Options struct {
+	Command              commandType
 	Threads              int
-	LogLinesPerSec       int
+	LogLinesPerSec       int64
 	Destination          string
 	Source               string
 	SyntheticPayloadSize int
-	TotalLogLines        int
+	TotalLogLines        int64
 	LogFormat            string
 	OutputFile           string
 	DestinationAPIURL    string

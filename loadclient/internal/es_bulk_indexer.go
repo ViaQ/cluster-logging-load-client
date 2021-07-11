@@ -17,7 +17,8 @@ const (
 )
 
 var (
-	CountSuccessful uint64
+	CountSuccessful int64
+	CountFail       int64
 
 	numWorkers = runtime.NumCPU()
 	flushBytes = 5e+6
@@ -52,7 +53,6 @@ func EsClient(esURL string) (*elasticsearch.Client, error) {
 	}
 	return es, nil
 }
-
 
 func CreateESBulkIndexer(es *elasticsearch.Client) esutil.BulkIndexer {
 	// Create the BulkIndexer

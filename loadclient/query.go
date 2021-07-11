@@ -2,78 +2,137 @@ package loadclient
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/ViaQ/cluster-logging-load-client/loadclient/internal"
+	logcli "github.com/grafana/loki/pkg/logcli/client"
+	"github.com/grafana/loki/pkg/logproto"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
+	"io/ioutil"
 	"math/rand"
+	"net/url"
 	"strings"
 	"time"
 )
 
-func QueryLog(queries []string,options Options) {
-	opt = options
-	if opt.DestinationAPIURL != "" {
-		switch opt.Destination {
-		case "loki":
-			log.Errorf("Query to loki: TO BE IMPLEMENTED")
-		case "elasticsearch":
-			log.Debugf("Query es")
-			logQueryES(opt.DestinationAPIURL, queries, opt.LogLinesPerSec)
-		default:
-			log.Errorf("Unsupported remote type: %s\n", opt.Destination)
+type logQuerier struct {
+	runner
+	queryFrom func(query string, lineCount int64) error
+	queries   []string
+}
+
+func (q *logQuerier) initQueryDestination() {
+	var err error
+	switch opt.Destination {
+	case "loki":
+		q.lokiLogCLIClient, err = initLogCLIClient(opt.DestinationAPIURL, opt.Loki.TenantID)
+		if err != nil {
+			log.Fatalf("Unable to initialize logcli client %v", err)
 		}
-		return
+		q.queryFrom = q.queryLoki
+	case "elasticsearch":
+		q.elasticsearchClient, err = internal.EsClient(opt.DestinationAPIURL)
+		if err != nil {
+			log.Fatalf("Error creating the client: %s", err)
+		}
+		q.queryFrom = q.queryElasticSearch
+	default:
+		err = fmt.Errorf("unrecognized Destination %s", opt.Destination)
+		panic(err)
 	}
 }
 
-func logQueryES(apiURL string, queries []string, logLinesPerSec int ) {
-	log.Infof("%d queries: %v\n", len(queries), queries)
-	es, err := internal.EsClient(apiURL)
+func (q *logQuerier) queryLoki(query string, count int64) error {
+	log.Infof("query: %v\n", query)
+
+	resp, err := q.lokiLogCLIClient.QueryRange(query, 1000, time.Unix(0, 0), time.Now(), logproto.FORWARD, 0, 0, false)
 	if err != nil {
-		log.Fatalf("Error creating the client: %s", err)
+		log.Fatalf("Error Query using  loki logcli: %s", err)
 	}
 
-	ticker := time.NewTicker(time.Second / time.Duration(logLinesPerSec))
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-
-			var b strings.Builder
-			q := queries[rand.Intn(len(queries))]
-			log.Infof("query: %v\n", q)
-			b.WriteString(q)
-			res, err := es.Search(
-				es.Search.WithIndex(internal.IndexName),
-				es.Search.WithBody(strings.NewReader(b.String())),
-			)
-			if err != nil {
-				log.Fatalf("Error getting search response: %s", err)
-			}
-
-			type envelopeResponse struct {
-				Took int
-				Hits struct {
-					Total int
-					Hits  []struct {
-						ID         string          `json:"_id"`
-						Source     json.RawMessage `json:"_source"`
-						Highlights json.RawMessage `json:"highlight"`
-						Sort       []interface{}   `json:"sort"`
-					}
-				}
-			}
-
-			var r envelopeResponse
-			if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
-				log.Fatalf("Error parsing search response: %s", err)
-			}
-
-			log.Infof("took %d, hit total: %v\n", r.Took, r.Hits.Total)
-			_ = res.Body.Close()
-		}
-	}
+	log.Infof("query count %d :: status is %s, %d results, took %f \n", count, resp.Status, resp.Data.Statistics.Ingester.TotalLinesSent, resp.Data.Statistics.Summary.ExecTime)
+	return nil
 }
 
+func (q *logQuerier) queryElasticSearch(query string, count int64) error {
+	var b strings.Builder
+	log.Infof("query: %v\n", query)
+	b.WriteString(query)
+	res, err := q.elasticsearchClient.Search(
+		q.elasticsearchClient.Search.WithIndex(internal.IndexName),
+		q.elasticsearchClient.Search.WithBody(strings.NewReader(b.String())),
+	)
+	if err != nil {
+		log.Fatalf("Error getting search response: %s", err)
+	}
 
+	type envelopeResponse struct {
+		Took int
+		Hits struct {
+			Total int
+			Hits  []struct {
+				ID         string          `json:"_id"`
+				Source     json.RawMessage `json:"_source"`
+				Highlights json.RawMessage `json:"highlight"`
+				Sort       []interface{}   `json:"sort"`
+			}
+		}
+	}
 
+	var r envelopeResponse
+	if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
+		log.Fatalf("Error parsing search response: %s", err)
+	}
+
+	log.Infof("query count %d :: status is %s, %d results, took %f \n", count, "success", r.Hits.Total, float64(r.Took)/1000)
+	_ = res.Body.Close()
+	return nil
+}
+
+func initLogCLIClient(apiURL string, tenantID string) (logcli.DefaultClient, error) {
+	URL, err := url.Parse(apiURL)
+	if err != nil {
+		panic(err)
+	}
+	logCLIClient := logcli.DefaultClient{
+		Address: URL.String(),
+		OrgID:   tenantID,
+	}
+	return logCLIClient, nil
+}
+
+type queryYamlFormat struct {
+	Query []string `yaml:"query"`
+}
+
+func QueryLog(options Options) {
+	ExecuteMultiThreaded(options)
+}
+
+func (q *logQuerier) initQueries() {
+	yamlFile, err := ioutil.ReadFile(opt.QueryFile)
+	queryYaml := queryYamlFormat{}
+	if err != nil {
+		log.Fatalf("can't open query yaml file %s [%v]", opt.QueryFile, err)
+	}
+	err = yaml.Unmarshal(yamlFile, &queryYaml)
+	if err != nil {
+		log.Fatalf("can't unmarshal query yaml file %s [%v]", opt.QueryFile, err)
+	}
+	q.queries = queryYaml.Query
+	log.Infof("%d queries: %v\n", len(q.queries), q.queries)
+}
+
+func (q *logQuerier) getQuery() string {
+	query := q.queries[rand.Intn(len(q.queries))]
+	return query
+}
+
+func (q *logQuerier) queryAction(linesCount int64) {
+	query := q.getQuery()
+
+	err := q.queryFrom(query, linesCount)
+	if err != nil {
+		panic(err)
+	}
+}
