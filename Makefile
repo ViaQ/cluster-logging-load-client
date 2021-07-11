@@ -6,7 +6,7 @@ include .bingo/Variables.mk
 IMAGE_PREFIX ?= quay.io/openshift-logging
 IMAGE_TAG := 0.1
 ES_CONTAINER_NAME=elasticsearch
-ES_IMAGE_TAG=elasticsearch:6.8.12
+ES_IMAGE_TAG=docker.io/library/elasticsearch:6.8.12
 
 all: test build-image
 
@@ -38,7 +38,7 @@ undeploy:
 	kubectl delete -f deployment.yaml
 
 run-es:
-	docker run -d --name $(ES_CONTAINER_NAME) \
+	podman run -d --name $(ES_CONTAINER_NAME) \
 		-p 9200:9200 -p 9300:9300 \
 		-e "discovery.type=single-node" \
 		$(ES_IMAGE_TAG)

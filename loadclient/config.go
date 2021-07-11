@@ -10,10 +10,11 @@ type Options struct {
 	LogFormat            string
 	OutputFile           string
 	DestinationAPIURL    string
-	Loki Loki
+	QueryFile            string
+	Loki                 Loki
 }
 
 type Loki struct {
-	TenantID         string
-	Labels           string
+	TenantID string
+	Labels   string
 }
