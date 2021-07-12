@@ -7,15 +7,20 @@ import (
 	"github.com/mitchellh/go-homedir"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v2"
+	"io/ioutil"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 )
 
 var opt = loadclient.Options{}
 var cfgFile string
 var logLevel string
+var envPrefix = "LOADCLIENT"
 
 // rootCmd represents the root command
 var rootCmd = &cobra.Command{
@@ -33,17 +38,29 @@ var generateCmd = &cobra.Command{
 	},
 }
 
+
+type queryYamlFormat struct{
+	Query []string `yaml:"query"`
+}
+
 // queryCmd represents the query command
 var queryCmd = &cobra.Command{
+
 	Use:   "query",
 	Short: "query the log storage",
 	Run: func(cmd *cobra.Command, args []string) {
-		q := viper.GetStringSlice("query")
-		if len(q) == 0 {
-			log.Fatal("Missing query in the config file")
+		yamlFile, err := ioutil.ReadFile(opt.QueryFile)
+		queryYaml := queryYamlFormat{}
+		if err != nil {
+			log.Fatalf("can't open query yaml file %s [%v]",opt.QueryFile, err)
 		}
+		err = yaml.Unmarshal(yamlFile, &queryYaml)
+		if err != nil {
+			log.Fatalf("can't unmarshal query yaml file %s [%v]",opt.QueryFile, err)
+		}
+
 		logConfig()
-		loadclient.QueryLog(q,opt)
+		loadclient.QueryLog(queryYaml.Query, opt)
 	},
 }
 
@@ -51,7 +68,6 @@ func logConfig() {
 	configAsJSON, _ := json.MarshalIndent(opt, "", "\t")
 	log.Infof("configuration:\n%s\n", configAsJSON)
 }
-
 
 func init() {
 	cobra.OnInitialize(initConfig)
@@ -72,15 +88,19 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "error", "Log level: debug, info, warning, error (default = error)")
 
+	rootCmd.PersistentFlags().StringVar(&opt.QueryFile, "query-file", "", "Query file name (default = none)")
+
 	rootCmd.AddCommand(generateCmd)
 	rootCmd.AddCommand(queryCmd)
 }
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
+	v := viper.New()
+
 	if cfgFile != "" {
 		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
+		v.SetConfigFile(cfgFile)
 	} else {
 		// Find home directory.
 		home, err := homedir.Dir()
@@ -90,16 +110,19 @@ func initConfig() {
 		}
 
 		// Search config in home directory with name ".logger" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigName(".logger")
+		v.AddConfigPath(home)
+		v.SetConfigName(".logger")
 	}
 
-	viper.AutomaticEnv() // read in environment variables that match
+	v.SetEnvPrefix(envPrefix)
+	v.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
+	if err := v.ReadInConfig(); err == nil {
+		fmt.Println("Using config file:", v.ConfigFileUsed())
 	}
+
+	bindFlags(rootCmd, v)
 
 	ll, err := log.ParseLevel(logLevel)
 	if err != nil {
@@ -108,7 +131,23 @@ func initConfig() {
 	log.SetLevel(ll)
 	log.SetFormatter(&log.TextFormatter{
 		FullTimestamp: true,
-	})}
+	})
+}
+
+func bindFlags(cmd *cobra.Command, v *viper.Viper) {
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		if strings.Contains(f.Name, "-") {
+			envVarSuffix := strings.ToUpper(strings.ReplaceAll(f.Name, "-", "_"))
+			v.BindEnv(f.Name, fmt.Sprintf("%s_%s", envPrefix, envVarSuffix))
+		}
+
+		// Apply the viper config value to the flag when the flag is not set and viper has a value
+		if !f.Changed && v.IsSet(f.Name) {
+			val := v.Get(f.Name)
+			cmd.Flags().Set(f.Name, fmt.Sprintf("%v", val))
+		}
+	})
+}
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
