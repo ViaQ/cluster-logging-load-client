@@ -67,13 +67,34 @@ Launch an elasticsearch(v6) container:
     make run-es
 ```
 
-Run logger and set the remote type to `elasticsearch`: 
+Run logger and with remote type  `elasticsearch`: 
 ```
-    ./logger generate --destination-url http://localhost:9200 --destination=elasticsearch
+    make run-local-es-generate
 ```
 
 ### Generate query requests to elasticsearch v6
 
 ```
-    ./logger query --query-file ./config/dev.yaml --destination-url http://localhost:9200 --destination=elasticsearch
+    make run-local-es-query
+```
+
+
+##Loki:
+
+### Generate logs to loki
+
+Launch a loki container:
+```
+    make run-loki
+```
+
+Run logger and set with remote type  `loki`:
+```
+    make run-local-loki-generate
+```
+
+### Generate query requests to loki
+
+```
+    make run-local-loki-query
 ```
