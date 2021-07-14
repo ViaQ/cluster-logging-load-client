@@ -1,8 +1,8 @@
 # Log load client
 
-This project is a golang application to generate logs and send them to various output destinations in various formats
-The app runs as a single executable. Per configuration can spawn multiple threads. if more load is needed, scale the app horizontally
-Example::
+This project is a golang application to generate logs and send them to various output destinations in various formats.
+The app runs as a single executable. Per configuration can spawn multiple threads. If more load is needed, scale the app horizontally.
+Example:
 
 ```bash
 $ ./logger generate
@@ -13,7 +13,7 @@ goloader seq - localhost.localdomain.0.00000000000000003505C218B3455F5F - 000000
 goloader seq - localhost.localdomain.0.00000000000000003505C218B3455F5F - 0000000004 - error while reading floppy disk
 goloader seq - localhost.localdomain.0.00000000000000003505C218B3455F5F - 0000000005 - Don’t use beef stew as a computer password. It’s not stroganoff.
 ```
-##Usage:
+## Usage
 
 examples using docker image:
 `podman run quay.io/openshift-logging/cluster-logging-load-client:latest generate`  - start outputting logs to stdout
@@ -51,13 +51,13 @@ Environment variables are supported using prefix "LOADCLIENT" - examples:
 `LOADCLIENT_LOG_LEVEL=DEBUG ./logger generate`  
 `podman run -e LOADCLIENT_LOG_LEVEL=DEBUG quay.io/openshift-logging/cluster-logging-load-client:latest generate`  
 
-##Build:
+## Build
 
 To build the app run `make build`  
 To build docker image use `make build-image`  
 To push docker image use `make push-image`  
 
-##Elastic-search:
+## Elasticsearch
 
 ### Generate logs to elasticsearch v6
 
