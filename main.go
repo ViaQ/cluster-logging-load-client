@@ -9,8 +9,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"gopkg.in/yaml.v2"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"strings"
@@ -34,14 +32,11 @@ var generateCmd = &cobra.Command{
 	Short: "send randomly generated log lines to Destination",
 	Run: func(cmd *cobra.Command, args []string) {
 		logConfig()
+		opt.Command=loadclient.Generate
 		loadclient.GenerateLog(opt)
 	},
 }
 
-
-type queryYamlFormat struct{
-	Query []string `yaml:"query"`
-}
 
 // queryCmd represents the query command
 var queryCmd = &cobra.Command{
@@ -49,18 +44,9 @@ var queryCmd = &cobra.Command{
 	Use:   "query",
 	Short: "query the log storage",
 	Run: func(cmd *cobra.Command, args []string) {
-		yamlFile, err := ioutil.ReadFile(opt.QueryFile)
-		queryYaml := queryYamlFormat{}
-		if err != nil {
-			log.Fatalf("can't open query yaml file %s [%v]",opt.QueryFile, err)
-		}
-		err = yaml.Unmarshal(yamlFile, &queryYaml)
-		if err != nil {
-			log.Fatalf("can't unmarshal query yaml file %s [%v]",opt.QueryFile, err)
-		}
-
 		logConfig()
-		loadclient.QueryLog(queryYaml.Query, opt)
+		opt.Command=loadclient.Query
+		loadclient.QueryLog(opt)
 	},
 }
 
@@ -74,16 +60,18 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/logger.yaml)")
 	rootCmd.PersistentFlags().IntVar(&opt.Threads, "threads", 1, "Number of threads.(default 1)")
-	rootCmd.PersistentFlags().IntVar(&opt.LogLinesPerSec, "log-lines-rate", 1, "The total amount of log lines per thread per second to generate.(default 1)")
+	rootCmd.PersistentFlags().Int64Var(&opt.LogLinesPerSec, "log-lines-rate", 1, "The total amount of log lines per thread per second to generate.(default 1)")
 	rootCmd.PersistentFlags().StringVar(&opt.Source, "source", "simple", "Log lines Source: simple, application, synthetic. (default simple)")
 	rootCmd.PersistentFlags().StringVar(&opt.Destination, "destination", "stdout", "Log Destination: loki, elasticsearch, stdout, file. (default stdout)")
-	rootCmd.PersistentFlags().IntVar(&opt.TotalLogLines, "totalLogLines", 0, "Total number of log lines per thread (default 0 - infinite)")
+	rootCmd.PersistentFlags().Int64Var(&opt.TotalLogLines, "totalLogLines", 0, "Total number of log lines per thread (default 0 - infinite)")
 
 	rootCmd.PersistentFlags().StringVar(&opt.LogFormat, "output-format", "default", "The output format: default, crio (mimic CRIO output), csv")
 	rootCmd.PersistentFlags().IntVar(&opt.SyntheticPayloadSize, "synthetic-payload-size", 100, "Payload length [int] (default = 100)")
 	rootCmd.PersistentFlags().StringVar(&opt.OutputFile, "file", "output", "The file to output (default: output)")
 	rootCmd.PersistentFlags().StringVar(&opt.DestinationAPIURL, "destination-url", "", "send logs via api using the provided url (e.g http://localhost:3100/api/prom/push)")
-	rootCmd.PersistentFlags().StringVar(&opt.Loki.TenantID, "loki-tenant-ID", "fake", "Loki tenantID (default = fake)")
+	rootCmd.PersistentFlags().StringVar(&opt.DestinationAPIURL, "url", "", "Alt. destination flag (see --destination-url)")
+	rootCmd.PersistentFlags().StringVar(&opt.Loki.TenantID, "loki-tenant-ID", "", "Loki tenantID (default = fake)")
+	rootCmd.PersistentFlags().StringVar(&opt.Loki.TenantID, "tenant", "fake", "Alt. Loki tenantID flag (see --loki-tenant-ID)")
 	rootCmd.PersistentFlags().StringVar(&opt.Loki.Labels, "loki-labels", "random", "Loki labels: none,host,random (default = random)")
 
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "error", "Log level: debug, info, warning, error (default = error)")

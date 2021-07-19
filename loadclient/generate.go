@@ -8,34 +8,24 @@ import (
 	"github.com/ViaQ/cluster-logging-load-client/loadclient/internal"
 	"github.com/cortexproject/cortex/pkg/util"
 	"github.com/cortexproject/cortex/pkg/util/flagext"
-	"github.com/elastic/go-elasticsearch/v6"
 	"github.com/elastic/go-elasticsearch/v6/esutil"
 	kitlog "github.com/go-kit/kit/log"
 	promtail "github.com/grafana/loki/pkg/promtail/client"
 	"github.com/prometheus/common/model"
 	log "github.com/sirupsen/logrus"
-	"io"
 	"math/rand"
 	"net/url"
 	"os"
-	"sync"
 	"sync/atomic"
 	"time"
 )
 
 type logGenerator struct {
-	file                     io.Writer
-	hash                     string
-	getLogLineFromSource     func() (string, error)
-	writeToDestination       func(string) error
-	deferClose               func()
-	formatter                func(hash string, messageCount int, payload string) string
-	promtailClient           promtail.Client
-	elasticsearchClient      *elasticsearch.Client
-	elasticsearchBulkIndexer esutil.BulkIndexer
+	runner
+	getLogLineFromSource func() (string, error)
+	writeToDestination   func(string) error
+	formatter            func(hash string, messageCount int64, payload string) string
 }
-
-var opt = Options{}
 
 const (
 	minBurstMessageCount = 100
@@ -53,7 +43,7 @@ func (g *logGenerator) destinationFile(logLine string) error {
 	return nil
 }
 
-func (g *logGenerator) destinationLoki(logLine string) error {
+func (g *logGenerator) generateDestinationLoki(logLine string) error {
 	labelSet := model.LabelSet{}
 	switch opt.Loki.Labels {
 	case "none":
@@ -79,13 +69,13 @@ func (g *logGenerator) destinationLoki(logLine string) error {
 	}
 	err := g.promtailClient.Handle(labelSet, time.Now(), logLine)
 	if err != nil {
-		log.Errorf("destinationLoki error  %s", err)
+		log.Errorf("generateDestinationLoki error  %s", err)
 	}
 
 	return nil
 }
 
-func (g *logGenerator) destinationElasticSearch(logLine string) error {
+func (g *logGenerator) generateDestinationElasticSearch(logLine string) error {
 	a := internal.LogContent{
 		Hostname:  g.hash,
 		Service:   string(randService()),
@@ -117,7 +107,7 @@ func (g *logGenerator) destinationElasticSearch(logLine string) error {
 			// OnSuccess is called for each successful operation
 			OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, res esutil.BulkIndexerResponseItem) {
 				log.Infof("Injected doc ID: %v", res.DocumentID)
-				atomic.AddUint64(&internal.CountSuccessful, 1)
+				atomic.AddInt64(&internal.CountSuccessful, 1)
 			},
 
 			// OnFailure is called for each failed operation
@@ -126,6 +116,7 @@ func (g *logGenerator) destinationElasticSearch(logLine string) error {
 					log.Infof("ERROR: %s", err)
 				} else {
 					log.Infof("ERROR: %s: %s", res.Error.Type, res.Error.Reason)
+					atomic.AddInt64(&internal.CountFail, 1)
 				}
 			},
 		},
@@ -152,16 +143,16 @@ func sourceSynthetic() (string, error) {
 	return line, nil
 }
 
-func formatDefault(hash string, messageCount int, payload string) string {
+func formatDefault(hash string, messageCount int64, payload string) string {
 	return fmt.Sprintf("goloader seq - %s - %010d - %s\n", hash, messageCount, payload)
 }
 
-func formatCrio(hash string, messageCount int, payload string) string {
+func formatCrio(hash string, messageCount int64, payload string) string {
 	now := time.Now().Format(time.RFC3339Nano)
 	return fmt.Sprintf("%s stdout F goloader seq - %s - %010d - %s\n", now, hash, messageCount, payload)
 }
 
-func formatCSV(hash string, messageCount int, payload string) string {
+func formatCSV(hash string, messageCount int64, payload string) string {
 	now := time.Now().Format(time.RFC3339Nano)
 	return fmt.Sprintf("ts=%s stream=%s host=%s lvl=%s count=%d msg=%s\n", now, randStream(), hash, randLevel(), messageCount, payload)
 }
@@ -177,7 +168,7 @@ func randStream() string {
 	return stream
 }
 
-func (g *logGenerator) initSource() {
+func (g *logGenerator) initGenerateSource() {
 	switch opt.Source {
 	case "simple":
 		g.getLogLineFromSource = sourceSimple
@@ -192,7 +183,7 @@ func (g *logGenerator) initSource() {
 	}
 }
 
-func (g *logGenerator) initDestination() func() {
+func (g *logGenerator) initGenerateDestination() func() {
 	var err error
 	switch opt.Destination {
 	case "stdout":
@@ -211,7 +202,7 @@ func (g *logGenerator) initDestination() func() {
 		g.deferClose = func() {
 			g.promtailClient.Stop()
 		}
-		g.writeToDestination = g.destinationLoki
+		g.writeToDestination = g.generateDestinationLoki
 	case "elasticsearch":
 		g.elasticsearchClient, err = internal.EsClient(opt.DestinationAPIURL)
 		if err != nil {
@@ -220,9 +211,22 @@ func (g *logGenerator) initDestination() func() {
 		g.elasticsearchBulkIndexer = internal.CreateESBulkIndexer(g.elasticsearchClient)
 		internal.RecreateESIndex(g.elasticsearchClient)
 		g.deferClose = func() {
+			waitCount := 0
+			for {
+				count := internal.CountSuccessful + internal.CountFail
+				if count >= g.lineCount {
+					break
+				}
+				waitCount++
+				if waitCount > 60 {
+					err = fmt.Errorf("Waited for 60 seconds and still there are  pending elasticsearch writes, PANIC ")
+					panic(err)
+				}
+				time.Sleep(time.Duration(1 * float64(time.Second)))
+			}
 			_ = g.elasticsearchBulkIndexer.Close(context.Background())
 		}
-		g.writeToDestination = g.destinationElasticSearch
+		g.writeToDestination = g.generateDestinationElasticSearch
 	default:
 		err = fmt.Errorf("unrecognized Destination %s", opt.Destination)
 		panic(err)
@@ -231,7 +235,7 @@ func (g *logGenerator) initDestination() func() {
 	return g.deferClose
 }
 
-func (g *logGenerator) initFormat() {
+func (g *logGenerator) initGenerateFormat() {
 	switch opt.LogFormat {
 	case "default":
 		g.formatter = formatDefault
@@ -245,74 +249,8 @@ func (g *logGenerator) initFormat() {
 	}
 }
 
-func (g *logGenerator) run() {
-	burstSize := 1
-	if opt.LogLinesPerSec > minBurstMessageCount {
-		burstSize = numberOfBursts
-	}
-
-	linesCount := 0
-	startTime := time.Now().Unix() - 1
-	sleep := 1.0 / float64(burstSize)
-
-	for {
-		for i := 0; i < opt.LogLinesPerSec/burstSize; i++ {
-			logLine, err := g.getLogLineFromSource()
-			if err != nil {
-				panic(err)
-			}
-			formattedLogLine := g.formatter(g.hash, linesCount, logLine)
-			err = g.writeToDestination(formattedLogLine)
-			if err != nil {
-				panic(err)
-			}
-			linesCount++
-			if opt.TotalLogLines != 0 && linesCount >= opt.TotalLogLines {
-				return
-			}
-		}
-		deltaTime := int(time.Now().Unix() - startTime)
-
-		messagesLoggedPerSec := linesCount / deltaTime
-		if messagesLoggedPerSec >= opt.LogLinesPerSec {
-			time.Sleep(time.Duration(sleep * float64(time.Second)))
-		}
-	}
-}
-
 func GenerateLog(options Options) {
-	opt = options
-	var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	host, err := os.Hostname()
-	if err != nil {
-		panic(err)
-	}
-
-	var runnersWaitGroup sync.WaitGroup
-	runnersWaitGroup.Add(opt.Threads)
-	for threadCount := 0; threadCount < opt.Threads; threadCount++ {
-		go func(threadCount int) {
-			g := logGenerator{}
-			// define hash
-			g.hash = fmt.Sprintf("%s.%d.%032X", host, threadCount, rnd.Uint64())
-			// define Source for log lines
-			g.initSource()
-			// define Destination for log lines
-			deferFunc := g.initDestination()
-			if deferFunc != nil {
-				defer deferFunc()
-			}
-			// define log line format
-			g.initFormat()
-			// run
-			log.Infof("Start generating logs on thread #%d", threadCount)
-			g.run()
-			runnersWaitGroup.Done()
-			log.Infof("Done generating logs on thread #%d", threadCount)
-		}(threadCount)
-	}
-	runnersWaitGroup.Wait()
+	ExecuteMultiThreaded(options)
 }
 
 func initPromtailClient(apiURL string, tenantID string) (promtail.Client, error) {
@@ -337,4 +275,17 @@ func initPromtailClient(apiURL string, tenantID string) (promtail.Client, error)
 		return nil, err
 	}
 	return promtailClient, nil
+}
+
+func (g *logGenerator) generatorAction(linesCount int64) {
+	log.Debugf("generatorAction on line number: %d", linesCount)
+	logLine, err := g.getLogLineFromSource()
+	if err != nil {
+		panic(err)
+	}
+	formattedLogLine := g.formatter(g.hash, linesCount, logLine)
+	err = g.writeToDestination(formattedLogLine)
+	if err != nil {
+		panic(err)
+	}
 }

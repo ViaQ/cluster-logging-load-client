@@ -1,0 +1,3 @@
+# query is a list of queries that will be executed in the benchmark
+query:
+  - '{client="promtail"}'
