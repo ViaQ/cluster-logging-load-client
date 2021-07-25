@@ -45,7 +45,7 @@ func (q *logQuerier) initQueryDestination() {
 func (q *logQuerier) queryLoki(query string, count int64) error {
 	log.Infof("query: %v\n", query)
 
-	resp, err := q.lokiLogCLIClient.QueryRange(query, 1000, time.Unix(0, 0), time.Now(), logproto.FORWARD, 0, 0, false)
+	resp, err := q.lokiLogCLIClient.QueryRange(query, 100000, time.Now().Add(-24 * time.Hour), time.Now(), logproto.FORWARD, 0, 0, false)
 	if err != nil {
 		log.Fatalf("Error Query using  loki logcli: %s", err)
 	}
