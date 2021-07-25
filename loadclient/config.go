@@ -12,6 +12,7 @@ type Options struct {
 	OutputFile           string
 	DestinationAPIURL    string
 	QueryFile            string
+	Queries              []string
 	Loki                 Loki
 }
 

@@ -110,16 +110,21 @@ func QueryLog(options Options) {
 }
 
 func (q *logQuerier) initQueries() {
-	yamlFile, err := ioutil.ReadFile(opt.QueryFile)
-	queryYaml := queryYamlFormat{}
-	if err != nil {
-		log.Fatalf("can't open query yaml file %s [%v]", opt.QueryFile, err)
+	if opt.QueryFile != "" {
+		yamlFile, err := ioutil.ReadFile(opt.QueryFile)
+		if err != nil {
+			log.Fatalf("can't open query yaml file %s [%v]", opt.QueryFile, err)
+		}
+		err = yaml.Unmarshal(yamlFile, &q.queries)
+		if err != nil {
+			log.Fatalf("can't unmarshal query yaml file %s [%v]", opt.QueryFile, err)
+		}
+	} else if len(opt.Queries)>0 {
+		q.queries = opt.Queries
+	} else {
+		panic("can't find queries to use. Not using file and not using command line parameters")
 	}
-	err = yaml.Unmarshal(yamlFile, &queryYaml)
-	if err != nil {
-		log.Fatalf("can't unmarshal query yaml file %s [%v]", opt.QueryFile, err)
-	}
-	q.queries = queryYaml.Query
+
 	log.Infof("%d queries: %v\n", len(q.queries), q.queries)
 }
 

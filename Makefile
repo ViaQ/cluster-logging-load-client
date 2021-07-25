@@ -51,13 +51,13 @@ run-local-es-generate:
 	./logger generate --log-level info --destination elasticsearch --destination-url http://localhost:9200/ --totalLogLines 5
 
 run-local-es-query:
-	./logger query --log-level info --destination elasticsearch --destination-url http://localhost:9200/ --query-file ./config/es_query.yaml --totalLogLines 2
+	./logger query --log-level info --destination elasticsearch --destination-url http://localhost:9200/ --query-file ./config/es_queries.yaml --totalLogLines 2
 
 run-local-loki-generate:
 	./logger generate --log-level info --destination loki --destination-url http://localhost:3100/api/prom/push --totalLogLines 5
 
 run-local-loki-query:
-	./logger query --log-level info --destination loki --destination-url http://localhost:3100 --query-file ./config/loki_query.yaml --totalLogLines 2
+	./logger query --log-level info --destination loki --destination-url http://localhost:3100 --query-file ./config/loki_queries.yaml --totalLogLines 2
 
 deploy-local-es:
 	podman run -d --name $(ES_CONTAINER_NAME) \

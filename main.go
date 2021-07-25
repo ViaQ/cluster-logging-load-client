@@ -32,11 +32,10 @@ var generateCmd = &cobra.Command{
 	Short: "send randomly generated log lines to Destination",
 	Run: func(cmd *cobra.Command, args []string) {
 		logConfig()
-		opt.Command=loadclient.Generate
+		opt.Command = loadclient.Generate
 		loadclient.GenerateLog(opt)
 	},
 }
-
 
 // queryCmd represents the query command
 var queryCmd = &cobra.Command{
@@ -45,7 +44,7 @@ var queryCmd = &cobra.Command{
 	Short: "query the log storage",
 	Run: func(cmd *cobra.Command, args []string) {
 		logConfig()
-		opt.Command=loadclient.Query
+		opt.Command = loadclient.Query
 		loadclient.QueryLog(opt)
 	},
 }
@@ -76,6 +75,7 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "error", "Log level: debug, info, warning, error (default = error)")
 
+	rootCmd.PersistentFlags().StringArrayVar(&opt.Queries, "queries", []string{}, "list of queries e.g. {client=\"promtail\"} (default = none)")
 	rootCmd.PersistentFlags().StringVar(&opt.QueryFile, "query-file", "", "Query file name (default = none)")
 
 	rootCmd.AddCommand(generateCmd)
@@ -126,13 +126,13 @@ func bindFlags(cmd *cobra.Command, v *viper.Viper) {
 	cmd.Flags().VisitAll(func(f *pflag.Flag) {
 		if strings.Contains(f.Name, "-") {
 			envVarSuffix := strings.ToUpper(strings.ReplaceAll(f.Name, "-", "_"))
-			v.BindEnv(f.Name, fmt.Sprintf("%s_%s", envPrefix, envVarSuffix))
+			_ = v.BindEnv(f.Name, fmt.Sprintf("%s_%s", envPrefix, envVarSuffix))
 		}
 
 		// Apply the viper config value to the flag when the flag is not set and viper has a value
 		if !f.Changed && v.IsSet(f.Name) {
 			val := v.Get(f.Name)
-			cmd.Flags().Set(f.Name, fmt.Sprintf("%v", val))
+			_ = cmd.Flags().Set(f.Name, fmt.Sprintf("%v", val))
 		}
 	})
 }

@@ -28,22 +28,24 @@ Following flags are available:
 
 ```bash
 Flags:
--h, --help   help for generate
-
-Global Flags:
---config string                config file (default is $HOME/logger.yaml)
---destination string           Log Destination: loki, elasticsearch, stdout, file. (default stdout) (default "stdout")
---destination-url string       send logs via api using the provided url (e.g http://localhost:3100/api/prom/push)
---file string                  The file to output (default: output) (default "output")
---log-level string             Log level: debug, info, warning, error (default = error) (default "error")
---log-lines-rate int           The total amount of log lines per thread per second to generate.(default 1) (default 1)
---loki-labels string           Loki labels: none,host,random (default = random) (default "random")
---loki-tenant-ID string        Loki tenantID (default = fake) (default "fake")
---output-format string         The output format: default, crio (mimic CRIO output), csv (default "default")
---source string                Log lines Source: simple, application, synthetic. (default simple) (default "simple")
---synthetic-payload-size int   Payload length [int] (default = 100) (default 100)
---threads int                  Number of threads.(default 1) (default 1)
---totalLogLines int            Total number of log lines per thread (default 0 - infinite)
+      --config string                config file (default is $HOME/logger.yaml)
+      --destination string           Log Destination: loki, elasticsearch, stdout, file. (default stdout) (default "stdout")
+      --destination-url string       send logs via api using the provided url (e.g http://localhost:3100/api/prom/push)
+      --file string                  The file to output (default: output) (default "output")
+  -h, --help                         help for logger
+      --log-level string             Log level: debug, info, warning, error (default = error) (default "error")
+      --log-lines-rate int           The total amount of log lines per thread per second to generate.(default 1) (default 1)
+      --loki-labels string           Loki labels: none,host,random (default = random) (default "random")
+      --loki-tenant-ID string        Loki tenantID (default = fake)
+      --output-format string         The output format: default, crio (mimic CRIO output), csv (default "default")
+      --queries stringArray          list of queries e.g. {client="promtail"} (default = none)
+      --query-file string            Query file name (default = none)
+      --source string                Log lines Source: simple, application, synthetic. (default simple) (default "simple")
+      --synthetic-payload-size int   Payload length [int] (default = 100) (default 100)
+      --tenant string                Alt. Loki tenantID flag (see --loki-tenant-ID) (default "fake")
+      --threads int                  Number of threads.(default 1) (default 1)
+      --totalLogLines int            Total number of log lines per thread (default 0 - infinite)
+      --url string                   Alt. destination flag (see --destination-url)
 ```
 
 Environment variables are supported using prefix "LOADCLIENT" - examples: 
