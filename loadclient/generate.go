@@ -157,6 +157,23 @@ func formatCSV(hash string, messageCount int64, payload string) string {
 	return fmt.Sprintf("ts=%s stream=%s host=%s lvl=%s count=%d msg=%s\n", now, randStream(), hash, randLevel(), messageCount, payload)
 }
 
+func formatJson(hash string, messageCount int64, payload string) string {
+	now := time.Now().Format(time.RFC3339Nano)
+	mymap := map[string]interface{}{
+		"ts": now,
+		"stream": randStream(),
+		"host": hash,
+		"lvl": randLevel(),
+		"count": messageCount,
+		"msg": payload,
+	}
+	j, err := json.Marshal(mymap)
+	if err != nil {
+		log.Fatalf("Cannot marshal to json %s: %s", mymap, err)
+	}
+	return fmt.Sprintln(string(j))
+}
+
 func randStream() string {
 	var stream string
 	switch rand.Intn(2) {
@@ -243,6 +260,8 @@ func (g *logGenerator) initGenerateFormat() {
 		g.formatter = formatCrio
 	case "csv":
 		g.formatter = formatCSV
+	case "json":
+		g.formatter = formatJson
 	default:
 		err := fmt.Errorf("unrecognized formatter %s", opt.LogFormat)
 		panic(err)

@@ -37,7 +37,7 @@ Flags:
       --log-lines-rate int           The total amount of log lines per thread per second to generate.(default 1) (default 1)
       --loki-labels string           Loki labels: none,host,random (default = random) (default "random")
       --loki-tenant-ID string        Loki tenantID (default = fake)
-      --output-format string         The output format: default, crio (mimic CRIO output), csv (default "default")
+      --output-format string         The output format: default, crio (mimic CRIO output), csv, json (default "default")
       --queries stringArray          list of queries e.g. {client="promtail"} (default = none)
       --query-file string            Query file name (default = none)
       --source string                Log lines Source: simple, application, synthetic. (default simple) (default "simple")
