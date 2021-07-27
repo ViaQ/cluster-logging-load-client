@@ -64,7 +64,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&opt.Destination, "destination", "stdout", "Log Destination: loki, elasticsearch, stdout, file. (default stdout)")
 	rootCmd.PersistentFlags().Int64Var(&opt.TotalLogLines, "totalLogLines", 0, "Total number of log lines per thread (default 0 - infinite)")
 
-	rootCmd.PersistentFlags().StringVar(&opt.LogFormat, "output-format", "default", "The output format: default, crio (mimic CRIO output), csv")
+	rootCmd.PersistentFlags().StringVar(&opt.LogFormat, "output-format", "default", "The output format: default, crio (mimic CRIO output), csv, json")
 	rootCmd.PersistentFlags().IntVar(&opt.SyntheticPayloadSize, "synthetic-payload-size", 100, "Payload length [int] (default = 100)")
 	rootCmd.PersistentFlags().StringVar(&opt.OutputFile, "file", "output", "The file to output (default: output)")
 	rootCmd.PersistentFlags().StringVar(&opt.DestinationAPIURL, "destination-url", "", "send logs via api using the provided url (e.g http://localhost:3100/api/prom/push)")
