@@ -3,16 +3,17 @@ package loadclient
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/ViaQ/cluster-logging-load-client/loadclient/internal"
-	logcli "github.com/grafana/loki/pkg/logcli/client"
-	"github.com/grafana/loki/pkg/logproto"
-	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"math/rand"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/ViaQ/cluster-logging-load-client/loadclient/internal"
+	logcli "github.com/grafana/loki/pkg/logcli/client"
+	"github.com/grafana/loki/pkg/logproto"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 )
 
 type logQuerier struct {
@@ -45,7 +46,7 @@ func (q *logQuerier) initQueryDestination() {
 func (q *logQuerier) queryLoki(query string, count int64) error {
 	log.Infof("query: %v\n", query)
 
-	resp, err := q.lokiLogCLIClient.QueryRange(query, 100000, time.Now().Add(-24 * time.Hour), time.Now(), logproto.FORWARD, 0, 0, false)
+	resp, err := q.lokiLogCLIClient.QueryRange(query, 4000, time.Now().Add(-24*time.Hour), time.Now(), logproto.FORWARD, 0, 0, false)
 	if err != nil {
 		log.Fatalf("Error Query using  loki logcli: %s", err)
 	}
@@ -119,7 +120,7 @@ func (q *logQuerier) initQueries() {
 		if err != nil {
 			log.Fatalf("can't unmarshal query yaml file %s [%v]", opt.QueryFile, err)
 		}
-	} else if len(opt.Queries)>0 {
+	} else if len(opt.Queries) > 0 {
 		q.queries = opt.Queries
 	} else {
 		panic("can't find queries to use. Not using file and not using command line parameters")
