@@ -2,16 +2,17 @@ package loadclient
 
 import (
 	"fmt"
-	"github.com/elastic/go-elasticsearch/v6"
-	"github.com/elastic/go-elasticsearch/v6/esutil"
-	logcli "github.com/grafana/loki/pkg/logcli/client"
-	promtail "github.com/grafana/loki/pkg/promtail/client"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"math/rand"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/elastic/go-elasticsearch/v6"
+	"github.com/elastic/go-elasticsearch/v6/esutil"
+	logcli "github.com/grafana/loki/pkg/logcli/client"
+	promtail "github.com/grafana/loki/pkg/promtail/client"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -28,7 +29,7 @@ type runner struct {
 	lokiLogCLIClient         logcli.DefaultClient
 	elasticsearchClient      *elasticsearch.Client
 	elasticsearchBulkIndexer esutil.BulkIndexer
-	lineCount				 int64
+	lineCount                int64
 }
 
 type commandType string
@@ -37,7 +38,7 @@ var opt = Options{}
 
 func ExecuteMultiThreaded(options Options) {
 	opt = options
-	var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	host, err := os.Hostname()
 	if err != nil {

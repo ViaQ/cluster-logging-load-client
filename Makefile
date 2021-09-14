@@ -16,10 +16,13 @@ all: clean build test build-image local ## Run everything (clean, build, test...
 lint: $(GOLINT)
 	 $(GOLINT) main.go
 
-build: lint ## Build the executable
+fmt: $(GOFUMPT)
+	 $(GOFUMPT) -s -w .
+
+build: lint fmt ## Build the executable
 	go build -o logger -v main.go
 
-test: lint ## Run the tests
+test: lint fmt ## Run the tests
 	go test -v loadclient/*.go
 
 clean: ## Delete the object files and cached files including the executable "logger"

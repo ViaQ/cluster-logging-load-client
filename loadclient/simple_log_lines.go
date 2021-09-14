@@ -1,8 +1,9 @@
 package loadclient
 
 import (
-	"github.com/prometheus/common/model"
 	"math/rand"
+
+	"github.com/prometheus/common/model"
 )
 
 func getSimpleLogLine() string {
@@ -73,4 +74,3 @@ var services = []model.LabelValue{
 	"cookie-jar",
 	"distributed-unicorn",
 }
-

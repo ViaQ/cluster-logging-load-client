@@ -3,22 +3,25 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/ViaQ/cluster-logging-load-client/loadclient"
 	"github.com/mitchellh/go-homedir"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"math/rand"
-	"os"
-	"strings"
-	"time"
 )
 
-var opt = loadclient.Options{}
-var cfgFile string
-var logLevel string
-var envPrefix = "LOADCLIENT"
+var (
+	opt       = loadclient.Options{}
+	cfgFile   string
+	logLevel  string
+	envPrefix = "LOADCLIENT"
+)
 
 // rootCmd represents the root command
 var rootCmd = &cobra.Command{

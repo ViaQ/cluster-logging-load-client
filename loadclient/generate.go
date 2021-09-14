@@ -5,6 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
+	"net/url"
+	"os"
+	"sync/atomic"
+	"time"
+
 	"github.com/ViaQ/cluster-logging-load-client/loadclient/internal"
 	"github.com/cortexproject/cortex/pkg/util"
 	"github.com/cortexproject/cortex/pkg/util/flagext"
@@ -13,11 +19,6 @@ import (
 	promtail "github.com/grafana/loki/pkg/promtail/client"
 	"github.com/prometheus/common/model"
 	log "github.com/sirupsen/logrus"
-	"math/rand"
-	"net/url"
-	"os"
-	"sync/atomic"
-	"time"
 )
 
 type logGenerator struct {
@@ -160,12 +161,12 @@ func formatCSV(hash string, messageCount int64, payload string) string {
 func formatJson(hash string, messageCount int64, payload string) string {
 	now := time.Now().Format(time.RFC3339Nano)
 	mymap := map[string]interface{}{
-		"ts": now,
+		"ts":     now,
 		"stream": randStream(),
-		"host": hash,
-		"lvl": randLevel(),
-		"count": messageCount,
-		"msg": payload,
+		"host":   hash,
+		"lvl":    randLevel(),
+		"count":  messageCount,
+		"msg":    payload,
 	}
 	j, err := json.Marshal(mymap)
 	if err != nil {
