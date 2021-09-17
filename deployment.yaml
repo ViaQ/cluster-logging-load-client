@@ -16,5 +16,7 @@ spec:
     spec:
       containers:
       - name: logger
-        image: quay.io/openshift-logging/logger:0.1
-        imagePullPolicy: Never
+        args:
+        - generate
+        image: quay.io/openshift-logging/cluster-logging-load-client:latest
+        imagePullPolicy: Always
