@@ -48,7 +48,7 @@ deploy: ## Deploy the image
 undeploy: ## Undeploy the image
 	kubectl delete -f deployment.yaml
 
-local: clean-local deploy-local-es deploy-local-loki run-local-es-generate run-local-es-query run-local-loki-generate run-local-loki-query ## Run all the local commands\
+local: clean-local deploy-local-es deploy-local-loki run-local-es-generate run-local-es-query run-local-loki-generate run-local-loki-query ## Run all the local commands
 
 clean-local: ## Clean all the local containers
 	podman kill $(ES_CONTAINER_NAME) > /dev/null 2>&1 || true
@@ -62,7 +62,7 @@ run-local-es-generate: ## Run logger with remote type elasticsearch
 run-local-es-query: ## Generate query requests to elasticsearch v6
 	./logger query --log-level info --destination elasticsearch --destination-url http://localhost:9200/ --query-file ./config/es_queries.yaml --totalLogLines 2
 
-run-local-loki-generate: ## Run logger set with remote type loki
+run-local-loki-generate: ## Run logger with remote type loki
 	./logger generate --log-level info --destination loki --destination-url http://localhost:3100/api/prom/push --totalLogLines 5
 
 run-local-loki-query: ## Generate query requests to loki
