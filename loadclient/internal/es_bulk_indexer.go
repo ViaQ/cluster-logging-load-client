@@ -2,10 +2,11 @@ package internal
 
 import (
 	"fmt"
-	"github.com/elastic/go-elasticsearch/v6"
-	log "github.com/sirupsen/logrus"
 	"runtime"
 	"time"
+
+	"github.com/elastic/go-elasticsearch/v6"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/elastic/go-elasticsearch/v6/esapi"

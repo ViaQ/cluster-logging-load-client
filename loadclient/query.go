@@ -102,10 +102,6 @@ func initLogCLIClient(apiURL string, tenantID string) (logcli.DefaultClient, err
 	return logCLIClient, nil
 }
 
-type queryYamlFormat struct {
-	Query []string `yaml:"query"`
-}
-
 func QueryLog(options Options) {
 	ExecuteMultiThreaded(options)
 }
