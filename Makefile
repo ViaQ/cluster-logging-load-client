@@ -3,17 +3,24 @@ PHONY: all build test clean build-image deploy undeploy push-image run-es
 
 include .bingo/Variables.mk
 
-IMAGE_PREFIX ?= quay.io/openshift-logging
-IMAGE_TAG := 0.1
+REGISTRY_ORG ?= openshift-logging
+VERSION ?= 0.1
+
+IMG ?= quay.io/$(REGISTRY_ORG)/cluster-logging-load-client:$(VERSION)
+
 ES_CONTAINER_NAME=elasticsearch
 ES_IMAGE_TAG=docker.io/library/elasticsearch:6.8.12
 LOKI_CONTAINER_NAME=loki
 LOKI_IMAGE_TAG=docker.io/grafana/loki:2.2.1
 
-##@ <target>:
-all: clean build test build-image local ## Run everything (clean, build, test...)
-	
-lint: $(GOLINT)
+OCI_RUNTIME ?= $(shell which podman || which docker)
+
+all: clean build test build-image local ## Runs all commands
+
+help: ## Display this help
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+lint: $(GOLINT) ## Lints the files
 	 $(GOLINT) main.go
 
 build: lint ## Build the executable
@@ -22,29 +29,23 @@ build: lint ## Build the executable
 test: lint ## Run the tests
 	go test -v loadclient/*.go
 
-clean: ## Delete the object files and cached files including the executable "logger"
+clean: ## Delete the object files and cached files including the executable
 	rm -f ./logger
 	go clean ./...
 
 build-image: ## Build the image
-	docker build -t $(IMAGE_PREFIX)/cluster-logging-load-client .
-	docker tag $(IMAGE_PREFIX)/cluster-logging-load-client $(IMAGE_PREFIX)/cluster-logging-load-client:$(IMAGE_TAG)
+	$(OCI_RUNTIME) build -t $(IMG) .
 
 push-image: ## Push the image
-	docker push $(IMAGE_PREFIX)/cluster-logging-load-client:$(IMAGE_TAG)
-	docker push $(IMAGE_PREFIX)/cluster-logging-load-client:latest
+	$(OCI_RUNTIME) push $(IMG)
 
-deploy: ## Deploy the image (build-image must be called before deploy)
+deploy: ## Deploy the image
 	kubectl apply -f deployment.yaml
-
-help: ## Display this help
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 undeploy: ## Undeploy the image
 	kubectl delete -f deployment.yaml
 
-local: clean-local deploy-local-es deploy-local-loki run-local-es-generate run-local-es-query run-local-loki-generate run-local-loki-query ## Run all the local commands (this is a local usage example)
-	
+local: clean-local deploy-local-es deploy-local-loki run-local-es-generate run-local-es-query run-local-loki-generate run-local-loki-query ## Run all the local commands\
 
 clean-local: ## Clean all the local containers
 	podman kill $(ES_CONTAINER_NAME) > /dev/null 2>&1 || true
