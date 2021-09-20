@@ -74,6 +74,8 @@ func ExecuteMultiThreaded(options Options) {
 				q := logQuerier{}
 				// initialize the list of queries
 				q.initQueries()
+				// initialize the range
+				q.initQueryRange()
 				// define Destination for queries
 				q.initQueryDestination()
 				// define the runner action

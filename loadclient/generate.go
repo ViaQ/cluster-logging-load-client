@@ -281,7 +281,7 @@ func initPromtailClient(apiURL string, tenantID string) (promtail.Client, error)
 	logger := kitlog.NewLogfmtLogger(os.Stdout)
 	promtailClient, err := promtail.New(promtail.Config{
 		BatchWait: 0,
-		BatchSize: 1000000,
+		BatchSize: 1000,
 		Timeout:   time.Second * 30,
 		BackoffConfig: util.BackoffConfig{
 			MinBackoff: time.Second * 1,

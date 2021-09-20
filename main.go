@@ -79,6 +79,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "error", "Log level: debug, info, warning, error (default = error)")
 
 	rootCmd.PersistentFlags().StringArrayVar(&opt.Queries, "queries", []string{}, "list of queries e.g. {client=\"promtail\"} (default = none)")
+	rootCmd.PersistentFlags().StringVar(&opt.QueryRange, "query-range", "1m", "The interval of time that logs were recorded in should be collected for")
 	rootCmd.PersistentFlags().StringVar(&opt.QueryFile, "query-file", "", "Query file name (default = none)")
 
 	rootCmd.AddCommand(generateCmd)

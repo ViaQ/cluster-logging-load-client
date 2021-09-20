@@ -18,8 +18,18 @@ import (
 
 type logQuerier struct {
 	runner
-	queryFrom func(query string, lineCount int64) error
-	queries   []string
+	queryFrom  func(query string, lineCount int64) error
+	queries    []string
+	queryRange time.Duration
+}
+
+func (q *logQuerier) initQueryRange() {
+	dur, err := time.ParseDuration(opt.QueryRange)
+	if err != nil {
+		panic(err)
+	}
+
+	q.queryRange = dur * -1
 }
 
 func (q *logQuerier) initQueryDestination() {
@@ -46,7 +56,7 @@ func (q *logQuerier) initQueryDestination() {
 func (q *logQuerier) queryLoki(query string, count int64) error {
 	log.Infof("query: %v\n", query)
 
-	resp, err := q.lokiLogCLIClient.QueryRange(query, 4000, time.Now().Add(-24*time.Hour), time.Now(), logproto.FORWARD, 0, 0, false)
+	resp, err := q.lokiLogCLIClient.QueryRange(query, 4000, time.Now().Add(q.queryRange), time.Now(), logproto.FORWARD, 0, 0, false)
 	if err != nil {
 		log.Fatalf("Error Query using loki logcli: %s", err)
 	}
