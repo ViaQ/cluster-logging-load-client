@@ -13,6 +13,7 @@ type Options struct {
 	DestinationAPIURL    string
 	QueryFile            string
 	Queries              []string
+	QueryRange           string
 	Loki                 Loki
 }
 
