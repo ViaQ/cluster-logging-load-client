@@ -81,7 +81,7 @@ Run logger and with remote type  `elasticsearch`:
 ```
 
 
-##Loki:
+## Loki
 
 ### Generate logs to loki
 
