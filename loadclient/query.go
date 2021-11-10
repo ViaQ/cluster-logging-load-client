@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/common/config"
+
 	"github.com/ViaQ/cluster-logging-load-client/loadclient/internal"
 	logcli "github.com/grafana/loki/pkg/logcli/client"
 	"github.com/grafana/loki/pkg/logproto"
@@ -36,7 +38,7 @@ func (q *logQuerier) initQueryDestination() {
 	var err error
 	switch opt.Destination {
 	case "loki":
-		q.lokiLogCLIClient, err = initLogCLIClient(opt.DestinationAPIURL, opt.Loki.TenantID)
+		q.lokiLogCLIClient, err = initLogCLIClient(opt.DestinationAPIURL, opt.Loki.TenantID, opt.DisableSecurityCheck)
 		if err != nil {
 			log.Fatalf("Unable to initialize logcli client %v", err)
 		}
@@ -100,12 +102,15 @@ func (q *logQuerier) queryElasticSearch(query string, count int64) error {
 	return nil
 }
 
-func initLogCLIClient(apiURL string, tenantID string) (logcli.DefaultClient, error) {
+func initLogCLIClient(apiURL string, tenantID string, disableSecurityCheck bool) (logcli.DefaultClient, error) {
 	URL, err := url.Parse(apiURL)
 	if err != nil {
 		panic(err)
 	}
 	logCLIClient := logcli.DefaultClient{
+		TLSConfig: config.TLSConfig{
+			InsecureSkipVerify: disableSecurityCheck,
+		},
 		Address: URL.String(),
 		OrgID:   tenantID,
 	}

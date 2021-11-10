@@ -17,6 +17,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v6/esutil"
 	kitlog "github.com/go-kit/kit/log"
 	promtail "github.com/grafana/loki/pkg/promtail/client"
+	"github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	log "github.com/sirupsen/logrus"
 )
@@ -213,7 +214,7 @@ func (g *logGenerator) initGenerateDestination() func() {
 		}
 		g.writeToDestination = g.destinationFile
 	case "loki":
-		g.promtailClient, err = initPromtailClient(opt.DestinationAPIURL, opt.Loki.TenantID)
+		g.promtailClient, err = initPromtailClient(opt.DestinationAPIURL, opt.Loki.TenantID, opt.DisableSecurityCheck)
 		if err != nil {
 			log.Fatalf("Unable to initialize promtail client %v", err)
 		}
@@ -273,13 +274,18 @@ func GenerateLog(options Options) {
 	ExecuteMultiThreaded(options)
 }
 
-func initPromtailClient(apiURL string, tenantID string) (promtail.Client, error) {
+func initPromtailClient(apiURL string, tenantID string, disableSecurityCheck bool) (promtail.Client, error) {
 	URL, err := url.Parse(apiURL)
 	if err != nil {
 		return nil, err
 	}
 	logger := kitlog.NewLogfmtLogger(os.Stdout)
 	promtailClient, err := promtail.New(promtail.Config{
+		Client: config.HTTPClientConfig{
+			TLSConfig: config.TLSConfig{
+				InsecureSkipVerify: disableSecurityCheck,
+			},
+		},
 		BatchWait: 0,
 		BatchSize: 1000,
 		Timeout:   time.Second * 30,

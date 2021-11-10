@@ -15,6 +15,7 @@ type Options struct {
 	Queries              []string
 	QueryRange           string
 	Loki                 Loki
+	DisableSecurityCheck bool
 }
 
 type Loki struct {
