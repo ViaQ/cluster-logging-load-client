@@ -66,6 +66,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&opt.Source, "source", "simple", "Log lines Source: simple, application, synthetic. (default simple)")
 	rootCmd.PersistentFlags().StringVar(&opt.Destination, "destination", "stdout", "Log Destination: loki, elasticsearch, stdout, file. (default stdout)")
 	rootCmd.PersistentFlags().Int64Var(&opt.TotalLogLines, "totalLogLines", 0, "Total number of log lines per thread (default 0 - infinite)")
+	rootCmd.PersistentFlags().BoolVar(&opt.DisableSecurityCheck, "disable-security-check", false, "Disable security check in HTTPS client. (default false)")
 
 	rootCmd.PersistentFlags().StringVar(&opt.LogFormat, "output-format", "default", "The output format: default, crio (mimic CRIO output), csv, json")
 	rootCmd.PersistentFlags().IntVar(&opt.SyntheticPayloadSize, "synthetic-payload-size", 100, "Payload length [int] (default = 100)")
