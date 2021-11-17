@@ -286,8 +286,8 @@ func initPromtailClient(apiURL string, tenantID string, disableSecurityCheck boo
 				InsecureSkipVerify: disableSecurityCheck,
 			},
 		},
-		BatchWait: 0,
-		BatchSize: 1000,
+		BatchWait: 5 * time.Second,
+		BatchSize: 10000 * 1024,
 		Timeout:   time.Second * 30,
 		BackoffConfig: util.BackoffConfig{
 			MinBackoff: time.Second * 1,
