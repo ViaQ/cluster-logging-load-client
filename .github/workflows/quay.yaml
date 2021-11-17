@@ -7,7 +7,7 @@ on:
 env:
   IMAGE_REGISTRY: quay.io
   IMAGE_ORGANIZATION: openshift-logging
-  IMAGE_OPERATOR_NAME: cluster-logging-load-client
+  IMAGE_LOGGER_NAME: cluster-logging-load-client
 
 jobs:
  publish-client:
@@ -33,8 +33,8 @@ jobs:
        id: image_tags
        run: |
          echo -n ::set-output name=IMAGE_TAGS::
-         PULLSPEC="$IMAGE_REGISTRY/$IMAGE_ORGANIZATION/$IMAGE_OPERATOR_NAME"
-         TAGS=("$PULLSPEC:latest")
+         PULLSPEC="$IMAGE_REGISTRY/$IMAGE_ORGANIZATION/$IMAGE_LOGGER_NAME"
+         TAGS=("$PULLSPEC:latest", "$PULLSPEC:v0.0.1")
          BUILD_DATE="$(date -u +'%Y-%m-%d')"
          VCS_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
          VCS_REF="$(git rev-parse --short HEAD)"
