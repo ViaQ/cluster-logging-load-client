@@ -16,6 +16,7 @@ type Options struct {
 	QueryRange           string
 	Loki                 Loki
 	DisableSecurityCheck bool
+	BearerTokenFile      string
 }
 
 type Loki struct {
