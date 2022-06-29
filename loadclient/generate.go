@@ -214,7 +214,7 @@ func (g *logGenerator) initGenerateDestination() func() {
 		}
 		g.writeToDestination = g.destinationFile
 	case "loki":
-		g.promtailClient, err = initPromtailClient(opt.DestinationAPIURL, opt.Loki.TenantID, opt.DisableSecurityCheck)
+		g.promtailClient, err = initPromtailClient(opt.DestinationAPIURL, opt.Loki.TenantID, opt.BearerTokenFile, opt.DisableSecurityCheck)
 		if err != nil {
 			log.Fatalf("Unable to initialize promtail client %v", err)
 		}
@@ -274,14 +274,16 @@ func GenerateLog(options Options) {
 	ExecuteMultiThreaded(options)
 }
 
-func initPromtailClient(apiURL string, tenantID string, disableSecurityCheck bool) (promtail.Client, error) {
+func initPromtailClient(apiURL, tenantID, credFile string, disableSecurityCheck bool) (promtail.Client, error) {
 	URL, err := url.Parse(apiURL)
 	if err != nil {
 		return nil, err
 	}
 	logger := kitlog.NewLogfmtLogger(os.Stdout)
+
 	promtailClient, err := promtail.New(promtail.Config{
 		Client: config.HTTPClientConfig{
+			BearerTokenFile: credFile,
 			TLSConfig: config.TLSConfig{
 				InsecureSkipVerify: disableSecurityCheck,
 			},
