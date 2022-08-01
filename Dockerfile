@@ -1,4 +1,4 @@
-FROM golang:1.16 as builder
+FROM registry.redhat.io/ubi8/go-toolset:1.16.12 as builder
 
 WORKDIR /app
 
@@ -12,13 +12,15 @@ RUN go mod download
 # Copy source code
 COPY main.go main.go
 COPY loadclient/ loadclient/
+USER 0
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on GOARCH=amd64 go build -o logger main.go
 
 # final stage
-FROM scratch
+FROM registry.access.redhat.com/ubi8/ubi:8.6
 COPY --from=builder /app/logger /app/
+RUN chmod 755 /app/*
 EXPOSE 8080
 
 ENTRYPOINT ["/app/logger"]
