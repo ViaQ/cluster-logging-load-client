@@ -12,11 +12,13 @@ import (
 	"time"
 
 	"github.com/ViaQ/cluster-logging-load-client/loadclient/internal"
-	"github.com/cortexproject/cortex/pkg/util"
-	"github.com/cortexproject/cortex/pkg/util/flagext"
 	"github.com/elastic/go-elasticsearch/v6/esutil"
 	kitlog "github.com/go-kit/kit/log"
-	promtail "github.com/grafana/loki/pkg/promtail/client"
+	"github.com/grafana/dskit/backoff"
+	"github.com/grafana/dskit/flagext"
+	"github.com/grafana/loki/clients/pkg/promtail/api"
+	promtail "github.com/grafana/loki/clients/pkg/promtail/client"
+	"github.com/grafana/loki/pkg/logproto"
 	"github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	log "github.com/sirupsen/logrus"
@@ -47,6 +49,7 @@ func (g *logGenerator) destinationFile(logLine string) error {
 
 func (g *logGenerator) generateDestinationLoki(logLine string) error {
 	labelSet := model.LabelSet{}
+
 	switch opt.Loki.Labels {
 	case "none":
 		labelSet = model.LabelSet{
@@ -69,9 +72,10 @@ func (g *logGenerator) generateDestinationLoki(logLine string) error {
 		err := fmt.Errorf("unrecognized LokiLabels %s", opt.Loki.Labels)
 		panic(err)
 	}
-	err := g.promtailClient.Handle(labelSet, time.Now(), logLine)
-	if err != nil {
-		log.Errorf("generateDestinationLoki error  %s", err)
+
+	g.promtailClient.Chan() <- api.Entry{
+		Labels: labelSet,
+		Entry:  logproto.Entry{Timestamp: time.Now(), Line: logLine},
 	}
 
 	return nil
@@ -214,7 +218,7 @@ func (g *logGenerator) initGenerateDestination() func() {
 		}
 		g.writeToDestination = g.destinationFile
 	case "loki":
-		g.promtailClient, err = initPromtailClient(opt.DestinationAPIURL, opt.Loki.TenantID, opt.BearerTokenFile, opt.DisableSecurityCheck)
+		g.promtailClient, err = initPromtailClient(opt.DestinationAPIURL, opt.Loki.TenantID, opt.BearerTokenFile, opt.CAFile, opt.DisableSecurityCheck)
 		if err != nil {
 			log.Fatalf("Unable to initialize promtail client %v", err)
 		}
@@ -274,34 +278,38 @@ func GenerateLog(options Options) {
 	ExecuteMultiThreaded(options)
 }
 
-func initPromtailClient(apiURL, tenantID, credFile string, disableSecurityCheck bool) (promtail.Client, error) {
+func initPromtailClient(apiURL, tenantID, credFile, caFile string, disableSecurityCheck bool) (promtail.Client, error) {
 	URL, err := url.Parse(apiURL)
 	if err != nil {
 		return nil, err
 	}
-	logger := kitlog.NewLogfmtLogger(os.Stdout)
 
-	promtailClient, err := promtail.New(promtail.Config{
+	logger := kitlog.NewLogfmtLogger(os.Stdout)
+	config := promtail.Config{
 		Client: config.HTTPClientConfig{
 			BearerTokenFile: credFile,
 			TLSConfig: config.TLSConfig{
+				CAFile:             caFile,
 				InsecureSkipVerify: disableSecurityCheck,
 			},
 		},
 		BatchWait: 5 * time.Second,
 		BatchSize: 10000 * 1024,
 		Timeout:   time.Second * 30,
-		BackoffConfig: util.BackoffConfig{
+		BackoffConfig: backoff.Config{
 			MinBackoff: time.Second * 1,
 			MaxBackoff: time.Second * 5,
 			MaxRetries: 5,
 		},
 		URL:      flagext.URLValue{URL: URL},
 		TenantID: tenantID,
-	}, logger)
+	}
+
+	promtailClient, err := promtail.New(nil, config, nil, logger)
 	if err != nil {
 		return nil, err
 	}
+
 	return promtailClient, nil
 }
 

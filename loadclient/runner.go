@@ -10,8 +10,8 @@ import (
 
 	"github.com/elastic/go-elasticsearch/v6"
 	"github.com/elastic/go-elasticsearch/v6/esutil"
+	promtail "github.com/grafana/loki/clients/pkg/promtail/client"
 	logcli "github.com/grafana/loki/pkg/logcli/client"
-	promtail "github.com/grafana/loki/pkg/promtail/client"
 	log "github.com/sirupsen/logrus"
 )
 

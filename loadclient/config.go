@@ -17,6 +17,7 @@ type Options struct {
 	Loki                 Loki
 	DisableSecurityCheck bool
 	BearerTokenFile      string
+	CAFile               string
 }
 
 type Loki struct {

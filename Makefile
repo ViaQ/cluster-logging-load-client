@@ -24,7 +24,7 @@ lint: $(GOLINT) ## Lints the files
 	 $(GOLINT) main.go
 
 fmt: $(GOFUMPT)
-	 $(GOFUMPT) -s -w .
+	 $(GOFUMPT) -w .
 
 build: lint fmt ## Build the executable
 	go build -o logger -v main.go
