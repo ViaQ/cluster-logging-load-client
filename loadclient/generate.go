@@ -156,7 +156,7 @@ func formatCrio(hash string, messageCount int64, payload string) string {
 
 func formatCSV(hash string, messageCount int64, payload string) string {
 	now := time.Now().Format(time.RFC3339Nano)
-	return fmt.Sprintf("ts=%s stream=%s host=%s lvl=%s count=%d msg=%s\n", now, randStream(), hash, randLevel(), messageCount, payload)
+	return fmt.Sprintf("ts=%s stream=%s host=%s level=%s count=%d msg=%q\n", now, randStream(), hash, randLevel(), messageCount, payload)
 }
 
 func formatJson(hash string, messageCount int64, payload string) string {
