@@ -218,7 +218,7 @@ func (g *logGenerator) initGenerateDestination() func() {
 		}
 		g.writeToDestination = g.destinationFile
 	case "loki":
-		g.promtailClient, err = initPromtailClient(opt.DestinationAPIURL, opt.Loki.TenantID, opt.BearerTokenFile, opt.CAFile, opt.DisableSecurityCheck)
+		g.promtailClient, err = initPromtailClient(opt.DestinationAPIURL, opt.Loki.TenantID, opt.DisableSecurityCheck)
 		if err != nil {
 			log.Fatalf("Unable to initialize promtail client %v", err)
 		}
@@ -278,21 +278,29 @@ func GenerateLog(options Options) {
 	ExecuteMultiThreaded(options)
 }
 
-func initPromtailClient(apiURL, tenantID, credFile, caFile string, disableSecurityCheck bool) (promtail.Client, error) {
+func initPromtailClient(apiURL, tenantID string, disableSecurityCheck bool) (promtail.Client, error) {
 	URL, err := url.Parse(apiURL)
 	if err != nil {
 		return nil, err
 	}
 
-	logger := kitlog.NewLogfmtLogger(os.Stdout)
+	clientConfig := config.HTTPClientConfig{}
+
+	if disableSecurityCheck {
+		clientConfig.TLSConfig = config.TLSConfig{
+			InsecureSkipVerify: disableSecurityCheck,
+		}
+	} else {
+		clientConfig.Authorization = &config.Authorization{
+			CredentialsFile: "/var/run/secrets/kubernetes.io/serviceaccount/token",
+		}
+		clientConfig.TLSConfig = config.TLSConfig{
+			CAFile: "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt",
+		}
+	}
+
 	config := promtail.Config{
-		Client: config.HTTPClientConfig{
-			BearerTokenFile: credFile,
-			TLSConfig: config.TLSConfig{
-				CAFile:             caFile,
-				InsecureSkipVerify: disableSecurityCheck,
-			},
-		},
+		Client:    clientConfig,
 		BatchWait: 5 * time.Second,
 		BatchSize: 10000 * 1024,
 		Timeout:   time.Second * 30,
@@ -304,13 +312,15 @@ func initPromtailClient(apiURL, tenantID, credFile, caFile string, disableSecuri
 		URL:      flagext.URLValue{URL: URL},
 		TenantID: tenantID,
 	}
+	metrics := promtail.NewMetrics(nil, nil)
+	logger := kitlog.NewLogfmtLogger(os.Stdout)
 
-	promtailClient, err := promtail.New(nil, config, nil, logger)
+	client, err := promtail.New(metrics, config, nil, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	return promtailClient, nil
+	return client, nil
 }
 
 func (g *logGenerator) generatorAction(linesCount int64) {
