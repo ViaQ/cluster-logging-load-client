@@ -98,29 +98,19 @@ func ExecuteMultiThreaded(options Options) {
 }
 
 func (r *runner) run() {
-	burstSize := int64(1)
-	if opt.LogLinesPerSec > minBurstMessageCount {
-		burstSize = numberOfBursts
-	}
-
 	r.lineCount = 0
-	startTime := time.Now().Unix() - 1
-	sleep := 1.0 / float64(burstSize)
 
 	for {
-		for i := int64(0); i < opt.LogLinesPerSec/burstSize; i++ {
-			// execute the per-log-line action
+		next := time.Now().UTC().Add(1 * time.Second)
+
+		for i := 0; i < opt.LogLinesPerSec; i++ {
 			r.runnerAction(r.lineCount)
 			r.lineCount++
-			if opt.TotalLogLines != 0 && r.lineCount >= opt.TotalLogLines {
-				return
-			}
 		}
-		deltaTime := int64(time.Now().Unix() - startTime)
 
-		messagesLoggedPerSec := r.lineCount / deltaTime
-		if messagesLoggedPerSec >= opt.LogLinesPerSec {
-			time.Sleep(time.Duration(sleep * float64(time.Second)))
+		current := time.Now().UTC()
+		if current.Before(next) {
+			time.Sleep(next.Sub(current))
 		}
 	}
 }

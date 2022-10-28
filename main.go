@@ -61,7 +61,7 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/logger.yaml)")
 	rootCmd.PersistentFlags().IntVar(&opt.Threads, "threads", 1, "Number of threads.(default 1)")
-	rootCmd.PersistentFlags().Int64Var(&opt.LogLinesPerSec, "log-lines-rate", 1, "The total amount of log lines per thread per second to generate.(default 1)")
+	rootCmd.PersistentFlags().IntVar(&opt.LogLinesPerSec, "log-lines-rate", 1, "The total amount of log lines per thread per second to generate.(default 1)")
 	rootCmd.PersistentFlags().StringVar(&opt.Source, "source", "simple", "Log lines Source: simple, application, synthetic. (default simple)")
 	rootCmd.PersistentFlags().StringVar(&opt.Destination, "destination", "stdout", "Log Destination: loki, elasticsearch, stdout, file. (default stdout)")
 	rootCmd.PersistentFlags().Int64Var(&opt.TotalLogLines, "totalLogLines", 0, "Total number of log lines per thread (default 0 - infinite)")

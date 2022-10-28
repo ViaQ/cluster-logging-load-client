@@ -31,11 +31,6 @@ type logGenerator struct {
 	formatter            func(hash string, messageCount int64, payload string) string
 }
 
-const (
-	minBurstMessageCount = 100
-	numberOfBursts       = 10
-)
-
 func (g *logGenerator) destinationStdOut(logLine string) error {
 	fmt.Printf("%s", logLine)
 	return nil
@@ -301,8 +296,8 @@ func initPromtailClient(apiURL, tenantID string, disableSecurityCheck bool) (pro
 
 	config := promtail.Config{
 		Client:    clientConfig,
-		BatchWait: 5 * time.Second,
-		BatchSize: 10000 * 1024,
+		BatchWait: 1 * time.Second,
+		BatchSize: 1024 * 1024, // ~ 1 MB
 		Timeout:   time.Second * 30,
 		BackoffConfig: backoff.Config{
 			MinBackoff: time.Second * 1,

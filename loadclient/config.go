@@ -3,7 +3,7 @@ package loadclient
 type Options struct {
 	Command              commandType
 	Threads              int
-	LogLinesPerSec       int64
+	LogLinesPerSec       int
 	Destination          string
 	Source               string
 	SyntheticPayloadSize int
