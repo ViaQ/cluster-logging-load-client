@@ -9,7 +9,7 @@ import (
 // Format describes the way a log should be formatted
 type Format string
 
-const {
+const (
 	// CRIOFormat formats a log to appear in CRIO style
 	CRIOFromat Format = "crio"
 
@@ -18,7 +18,7 @@ const {
 
 	// JSONFormat formats a log to appear in JSON style
 	JSONFormat Format = "json"
-}
+)
 
 func FormatLog(style Format, hash string, messageCount int64, payload string) (string, error) {
 	now := time.Now().Format(time.RFC3339Nano)

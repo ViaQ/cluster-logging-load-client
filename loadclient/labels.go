@@ -1,3 +1,5 @@
+package loadclient
+
 import (
 	"math/rand"
 

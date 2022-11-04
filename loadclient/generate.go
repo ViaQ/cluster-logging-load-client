@@ -26,7 +26,7 @@ import (
 
 type logGenerator struct {
 	runner
-	writeToDestination   func(string) error
+	writeToDestination func(string) error
 }
 
 func (g *logGenerator) destinationStdOut(logLine string) error {

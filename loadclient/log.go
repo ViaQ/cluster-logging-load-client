@@ -23,7 +23,7 @@ const (
 )
 
 const (
-	// SyntheticSampleSelection is a string of characters a SyntheticLogType will use 
+	// SyntheticSampleSelection is a string of characters a SyntheticLogType will use
 	// to create a synthetic log.
 	SyntheticSampleSelection = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 )
@@ -112,4 +112,3 @@ func generateSyntheticLog(size int) string {
 
 	return builder.String()
 }
-
