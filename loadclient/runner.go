@@ -56,8 +56,6 @@ func ExecuteMultiThreaded(options Options) {
 				g.hash = fmt.Sprintf("%s.%d.%032X", host, threadCount, rnd.Uint64())
 				// define Destination for log lines
 				g.initGenerateDestination()
-				// define log line format
-				g.initGenerateFormat()
 				// define the runner action
 				g.runnerAction = g.generatorAction
 				// run

@@ -86,6 +86,7 @@ var (
 	}
 )
 
+// RandomLog returns a log of a given type from the requested sample set.
 func RandomLog(logType LogType, logSize int) (string, error) {
 	switch logType {
 	case ApplicationLogType:

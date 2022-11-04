@@ -27,7 +27,6 @@ import (
 type logGenerator struct {
 	runner
 	writeToDestination   func(string) error
-	formatter            func(hash string, messageCount int64, payload string) string
 }
 
 func (g *logGenerator) destinationStdOut(logLine string) error {
@@ -128,38 +127,6 @@ func (g *logGenerator) generateDestinationElasticSearch(logLine string) error {
 	return nil
 }
 
-
-func formatDefault(hash string, messageCount int64, payload string) string {
-	return fmt.Sprintf("goloader seq - %s - %010d - %s\n", hash, messageCount, payload)
-}
-
-func formatCrio(hash string, messageCount int64, payload string) string {
-	now := time.Now().Format(time.RFC3339Nano)
-	return fmt.Sprintf("%s stdout F goloader seq - %s - %010d - %s\n", now, hash, messageCount, payload)
-}
-
-func formatCSV(hash string, messageCount int64, payload string) string {
-	now := time.Now().Format(time.RFC3339Nano)
-	return fmt.Sprintf("ts=%s stream=%s host=%s level=%s count=%d msg=%q\n", now, randStream(), hash, randLevel(), messageCount, payload)
-}
-
-func formatJson(hash string, messageCount int64, payload string) string {
-	now := time.Now().Format(time.RFC3339Nano)
-	mymap := map[string]interface{}{
-		"ts":     now,
-		"stream": randStream(),
-		"host":   hash,
-		"lvl":    randLevel(),
-		"count":  messageCount,
-		"msg":    payload,
-	}
-	j, err := json.Marshal(mymap)
-	if err != nil {
-		log.Fatalf("Cannot marshal to json %s: %s", mymap, err)
-	}
-	return fmt.Sprintln(string(j))
-}
-
 func randStream() string {
 	var stream string
 	switch rand.Intn(2) {
@@ -223,22 +190,6 @@ func (g *logGenerator) initGenerateDestination() func() {
 	return g.deferClose
 }
 
-func (g *logGenerator) initGenerateFormat() {
-	switch opt.LogFormat {
-	case "default":
-		g.formatter = formatDefault
-	case "crio":
-		g.formatter = formatCrio
-	case "csv":
-		g.formatter = formatCSV
-	case "json":
-		g.formatter = formatJson
-	default:
-		err := fmt.Errorf("unrecognized formatter %s", opt.LogFormat)
-		panic(err)
-	}
-}
-
 func GenerateLog(options Options) {
 	ExecuteMultiThreaded(options)
 }
@@ -296,7 +247,11 @@ func (g *logGenerator) generatorAction(linesCount int64) {
 		panic(err)
 	}
 
-	formattedLogLine := g.formatter(g.hash, linesCount, logLine)
+	formattedLogLine, err := FormatLog(Format(opt.LogFormat), g.hash, linesCount, logLine)
+	if err != nil {
+		panic(err)
+	}
+
 	err = g.writeToDestination(formattedLogLine)
 	if err != nil {
 		panic(err)
