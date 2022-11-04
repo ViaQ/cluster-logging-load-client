@@ -127,17 +127,6 @@ func (g *logGenerator) generateDestinationElasticSearch(logLine string) error {
 	return nil
 }
 
-func randStream() string {
-	var stream string
-	switch rand.Intn(2) {
-	case 1:
-		stream = "stderr"
-	default:
-		stream = "stdout"
-	}
-	return stream
-}
-
 func (g *logGenerator) initGenerateDestination() func() {
 	var err error
 	switch opt.Destination {
