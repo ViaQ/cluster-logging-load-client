@@ -26,7 +26,6 @@ import (
 
 type logGenerator struct {
 	runner
-	getLogLineFromSource func() (string, error)
 	writeToDestination   func(string) error
 	formatter            func(hash string, messageCount int64, payload string) string
 }
@@ -129,20 +128,6 @@ func (g *logGenerator) generateDestinationElasticSearch(logLine string) error {
 	return nil
 }
 
-func sourceSimple() (string, error) {
-	line := getSimpleLogLine()
-	return line, nil
-}
-
-func sourceApplication() (string, error) {
-	line := getApplicationLogLine()
-	return line, nil
-}
-
-func sourceSynthetic() (string, error) {
-	line := getSyntheticLogLine(opt.SyntheticPayloadSize)
-	return line, nil
-}
 
 func formatDefault(hash string, messageCount int64, payload string) string {
 	return fmt.Sprintf("goloader seq - %s - %010d - %s\n", hash, messageCount, payload)
@@ -184,21 +169,6 @@ func randStream() string {
 		stream = "stdout"
 	}
 	return stream
-}
-
-func (g *logGenerator) initGenerateSource() {
-	switch opt.Source {
-	case "simple":
-		g.getLogLineFromSource = sourceSimple
-	case "application":
-		g.getLogLineFromSource = sourceApplication
-	case "synthetic":
-		g.getLogLineFromSource = sourceSynthetic
-	default:
-		err := fmt.Errorf("unrecognized Source %s", opt.Source)
-		panic(err)
-
-	}
 }
 
 func (g *logGenerator) initGenerateDestination() func() {
@@ -320,10 +290,12 @@ func initPromtailClient(apiURL, tenantID string, disableSecurityCheck bool) (pro
 
 func (g *logGenerator) generatorAction(linesCount int64) {
 	log.Debugf("generatorAction on line number: %d", linesCount)
-	logLine, err := g.getLogLineFromSource()
+
+	logLine, err := RandomLog(LogType(opt.Source), opt.SyntheticPayloadSize)
 	if err != nil {
 		panic(err)
 	}
+
 	formattedLogLine := g.formatter(g.hash, linesCount, logLine)
 	err = g.writeToDestination(formattedLogLine)
 	if err != nil {

@@ -54,8 +54,6 @@ func ExecuteMultiThreaded(options Options) {
 				g := logGenerator{}
 				// define hash
 				g.hash = fmt.Sprintf("%s.%d.%032X", host, threadCount, rnd.Uint64())
-				// define Source for log lines
-				g.initGenerateSource()
 				// define Destination for log lines
 				g.initGenerateDestination()
 				// define log line format
