@@ -1,4 +1,4 @@
-FROM registry.redhat.io/ubi8/go-toolset:1.16.12 as builder
+FROM registry.redhat.io/ubi8/go-toolset:1.17.12 as builder
 
 WORKDIR /app
 

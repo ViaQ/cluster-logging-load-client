@@ -3,7 +3,7 @@ package loadclient
 type Options struct {
 	Command              commandType
 	Threads              int
-	LogLinesPerSec       int64
+	LogLinesPerSec       int
 	Destination          string
 	Source               string
 	SyntheticPayloadSize int
@@ -16,7 +16,6 @@ type Options struct {
 	QueryRange           string
 	Loki                 Loki
 	DisableSecurityCheck bool
-	BearerTokenFile      string
 }
 
 type Loki struct {

@@ -12,11 +12,13 @@ import (
 	"time"
 
 	"github.com/ViaQ/cluster-logging-load-client/loadclient/internal"
-	"github.com/cortexproject/cortex/pkg/util"
-	"github.com/cortexproject/cortex/pkg/util/flagext"
 	"github.com/elastic/go-elasticsearch/v6/esutil"
 	kitlog "github.com/go-kit/kit/log"
-	promtail "github.com/grafana/loki/pkg/promtail/client"
+	"github.com/grafana/dskit/backoff"
+	"github.com/grafana/dskit/flagext"
+	"github.com/grafana/loki/clients/pkg/promtail/api"
+	promtail "github.com/grafana/loki/clients/pkg/promtail/client"
+	"github.com/grafana/loki/pkg/logproto"
 	"github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	log "github.com/sirupsen/logrus"
@@ -28,11 +30,6 @@ type logGenerator struct {
 	writeToDestination   func(string) error
 	formatter            func(hash string, messageCount int64, payload string) string
 }
-
-const (
-	minBurstMessageCount = 100
-	numberOfBursts       = 10
-)
 
 func (g *logGenerator) destinationStdOut(logLine string) error {
 	fmt.Printf("%s", logLine)
@@ -47,6 +44,7 @@ func (g *logGenerator) destinationFile(logLine string) error {
 
 func (g *logGenerator) generateDestinationLoki(logLine string) error {
 	labelSet := model.LabelSet{}
+
 	switch opt.Loki.Labels {
 	case "none":
 		labelSet = model.LabelSet{
@@ -69,9 +67,10 @@ func (g *logGenerator) generateDestinationLoki(logLine string) error {
 		err := fmt.Errorf("unrecognized LokiLabels %s", opt.Loki.Labels)
 		panic(err)
 	}
-	err := g.promtailClient.Handle(labelSet, time.Now(), logLine)
-	if err != nil {
-		log.Errorf("generateDestinationLoki error  %s", err)
+
+	g.promtailClient.Chan() <- api.Entry{
+		Labels: labelSet,
+		Entry:  logproto.Entry{Timestamp: time.Now(), Line: logLine},
 	}
 
 	return nil
@@ -214,7 +213,7 @@ func (g *logGenerator) initGenerateDestination() func() {
 		}
 		g.writeToDestination = g.destinationFile
 	case "loki":
-		g.promtailClient, err = initPromtailClient(opt.DestinationAPIURL, opt.Loki.TenantID, opt.BearerTokenFile, opt.DisableSecurityCheck)
+		g.promtailClient, err = initPromtailClient(opt.DestinationAPIURL, opt.Loki.TenantID, opt.DisableSecurityCheck)
 		if err != nil {
 			log.Fatalf("Unable to initialize promtail client %v", err)
 		}
@@ -274,35 +273,49 @@ func GenerateLog(options Options) {
 	ExecuteMultiThreaded(options)
 }
 
-func initPromtailClient(apiURL, tenantID, credFile string, disableSecurityCheck bool) (promtail.Client, error) {
+func initPromtailClient(apiURL, tenantID string, disableSecurityCheck bool) (promtail.Client, error) {
 	URL, err := url.Parse(apiURL)
 	if err != nil {
 		return nil, err
 	}
-	logger := kitlog.NewLogfmtLogger(os.Stdout)
 
-	promtailClient, err := promtail.New(promtail.Config{
-		Client: config.HTTPClientConfig{
-			BearerTokenFile: credFile,
-			TLSConfig: config.TLSConfig{
-				InsecureSkipVerify: disableSecurityCheck,
-			},
-		},
-		BatchWait: 5 * time.Second,
-		BatchSize: 10000 * 1024,
+	clientConfig := config.HTTPClientConfig{}
+
+	if disableSecurityCheck {
+		clientConfig.TLSConfig = config.TLSConfig{
+			InsecureSkipVerify: disableSecurityCheck,
+		}
+	} else {
+		clientConfig.Authorization = &config.Authorization{
+			CredentialsFile: "/var/run/secrets/kubernetes.io/serviceaccount/token",
+		}
+		clientConfig.TLSConfig = config.TLSConfig{
+			CAFile: "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt",
+		}
+	}
+
+	config := promtail.Config{
+		Client:    clientConfig,
+		BatchWait: 1 * time.Second,
+		BatchSize: 1024 * 1024, // ~ 1 MB
 		Timeout:   time.Second * 30,
-		BackoffConfig: util.BackoffConfig{
+		BackoffConfig: backoff.Config{
 			MinBackoff: time.Second * 1,
 			MaxBackoff: time.Second * 5,
 			MaxRetries: 5,
 		},
 		URL:      flagext.URLValue{URL: URL},
 		TenantID: tenantID,
-	}, logger)
+	}
+	metrics := promtail.NewMetrics(nil, nil)
+	logger := kitlog.NewLogfmtLogger(os.Stdout)
+
+	client, err := promtail.New(metrics, config, nil, logger)
 	if err != nil {
 		return nil, err
 	}
-	return promtailClient, nil
+
+	return client, nil
 }
 
 func (g *logGenerator) generatorAction(linesCount int64) {

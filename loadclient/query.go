@@ -102,19 +102,28 @@ func (q *logQuerier) queryElasticSearch(query string, count int64) error {
 	return nil
 }
 
-func initLogCLIClient(apiURL string, tenantID string, disableSecurityCheck bool) (logcli.DefaultClient, error) {
+func initLogCLIClient(apiURL, tenantID string, disableSecurityCheck bool) (logcli.DefaultClient, error) {
 	URL, err := url.Parse(apiURL)
 	if err != nil {
 		panic(err)
 	}
-	logCLIClient := logcli.DefaultClient{
-		TLSConfig: config.TLSConfig{
-			InsecureSkipVerify: disableSecurityCheck,
-		},
+
+	client := logcli.DefaultClient{
 		Address: URL.String(),
 		OrgID:   tenantID,
 	}
-	return logCLIClient, nil
+
+	if disableSecurityCheck {
+		client.TLSConfig = config.TLSConfig{
+			InsecureSkipVerify: disableSecurityCheck,
+		}
+	} else {
+		client.BearerTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+		client.TLSConfig = config.TLSConfig{
+			CAFile: "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt",
+		}
+	}
+	return client, nil
 }
 
 func QueryLog(options Options) {

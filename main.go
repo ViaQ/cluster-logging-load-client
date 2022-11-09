@@ -42,7 +42,6 @@ var generateCmd = &cobra.Command{
 
 // queryCmd represents the query command
 var queryCmd = &cobra.Command{
-
 	Use:   "query",
 	Short: "query the log storage",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -62,12 +61,11 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/logger.yaml)")
 	rootCmd.PersistentFlags().IntVar(&opt.Threads, "threads", 1, "Number of threads.(default 1)")
-	rootCmd.PersistentFlags().Int64Var(&opt.LogLinesPerSec, "log-lines-rate", 1, "The total amount of log lines per thread per second to generate.(default 1)")
+	rootCmd.PersistentFlags().IntVar(&opt.LogLinesPerSec, "log-lines-rate", 1, "The total amount of log lines per thread per second to generate.(default 1)")
 	rootCmd.PersistentFlags().StringVar(&opt.Source, "source", "simple", "Log lines Source: simple, application, synthetic. (default simple)")
 	rootCmd.PersistentFlags().StringVar(&opt.Destination, "destination", "stdout", "Log Destination: loki, elasticsearch, stdout, file. (default stdout)")
 	rootCmd.PersistentFlags().Int64Var(&opt.TotalLogLines, "totalLogLines", 0, "Total number of log lines per thread (default 0 - infinite)")
 	rootCmd.PersistentFlags().BoolVar(&opt.DisableSecurityCheck, "disable-security-check", false, "Disable security check in HTTPS client. (default false)")
-	rootCmd.PersistentFlags().StringVar(&opt.BearerTokenFile, "loki-bearer-token-file", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to file containing bearer token")
 
 	rootCmd.PersistentFlags().StringVar(&opt.LogFormat, "output-format", "default", "The output format: default, crio (mimic CRIO output), csv, json")
 	rootCmd.PersistentFlags().IntVar(&opt.SyntheticPayloadSize, "synthetic-payload-size", 100, "Payload length [int] (default = 100)")
