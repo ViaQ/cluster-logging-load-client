@@ -14,9 +14,6 @@ const (
 	// application runtime environment.
 	ApplicationLogType LogType = "application"
 
-	// SimpleLogType represents a log with sample data.
-	SimpleLogType LogType = "simple"
-
 	// SyntheticLogType represents a log that is composed of random
 	// alphabetical characters of a certain size.
 	SyntheticLogType LogType = "synthetic"
@@ -92,13 +89,14 @@ func RandomLog(logType LogType, logSize int) (string, error) {
 	case ApplicationLogType:
 		index := rand.Intn(len(applicationSamples))
 		return applicationSamples[index], nil
-	case SimpleLogType:
-		index := rand.Intn(len(simpleSamples))
-		return simpleSamples[index], nil
 	case SyntheticLogType:
+		if logSize < 0 {
+			return "", fmt.Errorf("invalid size for sythentic log")
+		}
 		return generateSyntheticLog(logSize), nil
 	default:
-		return "", fmt.Errorf("unrecognized log type: %s", logType)
+		index := rand.Intn(len(simpleSamples))
+		return simpleSamples[index], nil
 	}
 }
 
