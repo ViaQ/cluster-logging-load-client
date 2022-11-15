@@ -1,6 +1,7 @@
 package loadclient
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -18,6 +19,16 @@ const (
 	// alphabetical characters of a certain size.
 	SyntheticLogType LogType = "synthetic"
 )
+
+// ElasticsearchLogContent describes the json content for logs for Elasticsearch
+type ElasticsearchLogContent struct {
+	Hostname  string    `json:"hostname"`
+	Service   string    `json:"service"`
+	Level     string    `json:"level"`
+	Component string    `json:"component"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+}
 
 const (
 	// SyntheticSampleSelection is a string of characters a SyntheticLogType will use
@@ -98,6 +109,25 @@ func RandomLog(logType LogType, logSize int) (string, error) {
 		index := rand.Intn(len(simpleSamples))
 		return simpleSamples[index], nil
 	}
+}
+
+// ElasticsearchLogContent returns a byte array representing the json content for
+// a log to be consumed by Elasticsearch.
+func ElasticsearchLogContent(host, logLine string) ([]byte, error) {
+	content := ElasticsearchLogContent{
+		Hostname:  host,
+		Service:   string(randService()),
+		Level:     string(randLevel()),
+		Component: string(randComponent()),
+		Body:      logLine,
+		CreatedAt: time.Now().Round(time.Second).UTC(),
+	}
+
+	data, err := json.Marshal(a)
+	if err != nil {
+		return nil, fmt.Errorf("error encoding elasticsearch log (%s): %s", logLine, err)
+	}
+	return data, nil
 }
 
 func generateSyntheticLog(size int) string {
