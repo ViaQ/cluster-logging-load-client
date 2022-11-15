@@ -1,4 +1,4 @@
-package loadclient
+package generator
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ type Format string
 
 const (
 	// CRIOFormat formats a log to appear in CRIO style
-	CRIOFromat Format = "crio"
+	CRIOFormat Format = "crio"
 
 	// CRIOFormat formats a log to appear in CSV style
 	CSVFormat Format = "csv"

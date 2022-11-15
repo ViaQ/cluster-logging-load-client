@@ -1,21 +1,14 @@
-package loadclient
+package querier
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"math/rand"
-	"net/url"
-	"strings"
 	"time"
 
-	"github.com/prometheus/common/config"
+	"github.com/ViaQ/cluster-logging-load-client/internal/clients"
 
-	"github.com/ViaQ/cluster-logging-load-client/loadclient/internal"
+	"github.com/elastic/go-elasticsearch/v6"
 	logcli "github.com/grafana/loki/pkg/logcli/client"
-	"github.com/grafana/loki/pkg/logproto"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 )
 
 // ClientType describes the type of client to use for querying logs
@@ -50,7 +43,7 @@ type LogQuerier struct {
 	elasticsearchClient *elasticsearch.Client
 	logCLIClient        *logcli.DefaultClient
 	rate                int
-	query               func(string) error
+	queryFrom           func(string) error
 	queryRange          time.Duration
 }
 
@@ -84,7 +77,7 @@ func NewLogQuerier(opts Options) (*LogQuerier, error) {
 		querier.queryFrom = querier.queryLoki
 		querier.queryRange = rangeDuration
 	default:
-		return fmt.Errorf("error client type: %s", opts.Client)
+		return nil, fmt.Errorf("error client type: %s", opts.Client)
 	}
 
 	return &querier, nil
@@ -96,7 +89,7 @@ func (q *LogQuerier) QueryLogs(query string) {
 		next := time.Now().UTC().Add(1 * time.Minute)
 
 		for i := 0; i < q.rate; i++ {
-			if q.queryFrom(query); err != nil {
+			if err := q.queryFrom(query); err != nil {
 				log.Fatalf("error querying: %s", err)
 			}
 		}

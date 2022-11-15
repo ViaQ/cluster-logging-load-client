@@ -1,4 +1,4 @@
-package loadclient
+package generator
 
 import (
 	"math/rand"
@@ -11,10 +11,10 @@ type LabelSetOptions string
 
 const (
 	// ClientOnlyOption creates a label set with only the client label
-	ClientOnlyOption LabelSetIncludeOptions = "client"
+	ClientOnlyOption LabelSetOptions = "client"
 
 	// ClientHostOnlyOption creates a label set with only the client and host label
-	ClientHostOnlyOption LabelSetIncludeOptions = "client-host"
+	ClientHostOnlyOption LabelSetOptions = "client-host"
 )
 
 var (

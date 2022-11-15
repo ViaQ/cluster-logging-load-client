@@ -36,7 +36,7 @@ func NewLogCLIClient(clientURL, tenant string, disableSecurityCheck bool) (*logc
 }
 
 // QueryLogsWithLogCLI executes a query range action with logCLI
-func QueryLogsWithLogCLI(client logcli.DefaultClient, query string, queryRange time.Duration) error {
+func QueryLogsWithLogCLI(client *logcli.DefaultClient, query string, queryRange time.Duration) error {
 	now := time.Now()
 	res, err := client.QueryRange(query, 4000, now.Add(queryRange), now, logproto.FORWARD, 0, 0, false)
 

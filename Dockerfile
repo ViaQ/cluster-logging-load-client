@@ -11,7 +11,7 @@ RUN go mod download
 
 # Copy source code
 COPY main.go main.go
-COPY loadclient/ loadclient/
+COPY internal/ internal/
 USER 0
 
 # Build

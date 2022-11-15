@@ -1,4 +1,4 @@
-package loadclient
+package generator
 
 import (
 	"context"
@@ -8,9 +8,9 @@ import (
 
 	"github.com/ViaQ/cluster-logging-load-client/internal/clients"
 
-	"github.com/elastic/go-elasticsearch/v6/esapi"
-	"github.com/prometheus/common/config"
-	"github.com/prometheus/common/model"
+	"github.com/elastic/go-elasticsearch/v6"
+	"github.com/elastic/go-elasticsearch/v6/esutil"
+	promtail "github.com/grafana/loki/clients/pkg/promtail/client"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -46,13 +46,12 @@ type Options struct {
 
 // LogGenerator describes an object which generates logs
 type LogGenerator struct {
-	elasticsearchClient *elasticsearch.Client
+	elasticsearchClient      *elasticsearch.Client
 	elasticsearchBulkIndexer esutil.BulkIndexer
-	file *File
-	promtailClient           *promtail.Client
-	host string
-	rate                int
-	writeToDestination func(string) error
+	file                     *os.File
+	promtailClient           promtail.Client
+	rate                     int
+	writeToDestination       func(string, string, LabelSetOptions) error
 	deferClose               func()
 }
 
@@ -61,17 +60,11 @@ func NewLogGenerator(opts Options) (*LogGenerator, error) {
 		rate: opts.LogsPerSecond,
 	}
 
-	host, err := os.Hostname()
-	if err != nil {
-		return nil, fmt.Errorf("error getting hostname: %s", err)
-	}
-	generator.host = host
-
-	switch opt.Destination {
+	switch opts.Client {
 	case "file":
 		outFile, err := os.Create(opts.FileName)
 		if err != nil {
-			return nil, fmt.Errorf("Unable to create out file %s: %v", opt.OutputFile, err)
+			return nil, fmt.Errorf("Unable to create out file %s: %v", opts.FileName, err)
 		}
 
 		generator.file = outFile
@@ -84,7 +77,7 @@ func NewLogGenerator(opts Options) (*LogGenerator, error) {
 		if err != nil {
 			return nil, fmt.Errorf("Unable to initialize promtail client %v", err)
 		}
-		
+
 		generator.promtailClient = client
 		generator.writeToDestination = generator.sendLokiLog
 		generator.deferClose = func() {
@@ -109,7 +102,7 @@ func NewLogGenerator(opts Options) (*LogGenerator, error) {
 		generator.deferClose = func() {
 			_ = generator.elasticsearchBulkIndexer.Close(context.Background())
 		}
-		
+
 	default:
 		generator.writeToDestination = generator.writeLogToStdout
 		generator.deferClose = func() {
@@ -120,28 +113,33 @@ func NewLogGenerator(opts Options) (*LogGenerator, error) {
 	return &generator, nil
 }
 
-func (g *logGenerator) GenerateLog(logType LogType, logFormat Format) {
-	lineCount = 0
+func (g *LogGenerator) GenerateLogs(logType LogType, logFormat Format, logSize int, labelOpts LabelSetOptions) {
+	host, err := os.Hostname()
+	if err != nil {
+		log.Fatalf("error getting hostname: %s", err)
+	}
 
 	defer g.deferClose()
+
+	var lineCount int64 = 0
 
 	for {
 		next := time.Now().UTC().Add(1 * time.Second)
 
-		for i := 0; i < opt.LogLinesPerSec; i++ {
-			logLine, err := RandomLog(logType, opt.SyntheticPayloadSize)
+		for i := 0; i < g.rate; i++ {
+			logLine, err := RandomLog(logType, logSize)
 			if err != nil {
-				log.Fatalf("error creating log: %s", err) 
+				log.Fatalf("error creating log: %s", err)
 			}
 
-			formattedLogLine, err := FormatLog(logFormat, generator.host, lineCount, logLine)
+			formattedLogLine, err := FormatLog(logFormat, host, lineCount, logLine)
 			if err != nil {
-				log.Fatalf("error formating log: %s", err) 
+				log.Fatalf("error formating log: %s", err)
 			}
 
-			err = g.writeToDestination(formattedLogLine)
+			err = g.writeToDestination(host, formattedLogLine, labelOpts)
 			if err != nil {
-				log.Fatalf("error writing log: %s", err) 
+				log.Fatalf("error writing log: %s", err)
 			}
 
 			lineCount++
@@ -154,27 +152,27 @@ func (g *logGenerator) GenerateLog(logType LogType, logFormat Format) {
 	}
 }
 
-func (g *logGenerator) writeLogToStdout(logLine string) error {
+func (g *LogGenerator) writeLogToStdout(host, logLine string, labelOpts LabelSetOptions) error {
 	fmt.Printf("%s", logLine)
 	return nil
 }
 
-func (g *logGenerator) writeLogToFile(logLine string) error {
-	_, err = fmt.Fprintf(g.file, "%s", logLine)
+func (g *LogGenerator) writeLogToFile(host, logLine string, labelOpts LabelSetOptions) error {
+	_, err := fmt.Fprintf(g.file, "%s", logLine)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (g *logGenerator) sendLokiLog(logLine string) error {
-	labels := LogLabelSet(g.host, LabelSetOptions(opt.Loki.Labels))
+func (g *LogGenerator) sendLokiLog(host, logLine string, labelOpts LabelSetOptions) error {
+	labels := LogLabelSet(host, LabelSetOptions(labelOpts))
 	clients.SendLogWithPromtail(g.promtailClient, logLine, labels)
 	return nil
 }
 
-func (g *logGenerator) sendElasticsearchLog(logLine string) error {
-	content, err := ElasticsearchLogContent(g.host)
+func (g *LogGenerator) sendElasticsearchLog(host, logLine string, labelOpts LabelSetOptions) error {
+	content, err := NewElasticsearchLogContent(host, logLine)
 	if err != nil {
 		return err
 	}

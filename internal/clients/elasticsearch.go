@@ -92,7 +92,6 @@ func SendLogWithElasticsearch(indexer esutil.BulkIndexer, logData []byte) error 
 			},
 		},
 	)
-
 	if err != nil {
 		return fmt.Errorf("error sending log with bulk indexer: %s", err)
 	}

@@ -1,10 +1,11 @@
-package loadclient
+package generator
 
 import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
 	"strings"
+	"time"
 )
 
 // LogType describes the type of generated log
@@ -111,9 +112,9 @@ func RandomLog(logType LogType, logSize int) (string, error) {
 	}
 }
 
-// ElasticsearchLogContent returns a byte array representing the json content for
+// NewElasticsearchLogContent returns a byte array representing the json content for
 // a log to be consumed by Elasticsearch.
-func ElasticsearchLogContent(host, logLine string) ([]byte, error) {
+func NewElasticsearchLogContent(host, logLine string) ([]byte, error) {
 	content := ElasticsearchLogContent{
 		Hostname:  host,
 		Service:   string(randService()),
@@ -123,7 +124,7 @@ func ElasticsearchLogContent(host, logLine string) ([]byte, error) {
 		CreatedAt: time.Now().Round(time.Second).UTC(),
 	}
 
-	data, err := json.Marshal(a)
+	data, err := json.Marshal(content)
 	if err != nil {
 		return nil, fmt.Errorf("error encoding elasticsearch log (%s): %s", logLine, err)
 	}
@@ -131,12 +132,11 @@ func ElasticsearchLogContent(host, logLine string) ([]byte, error) {
 }
 
 func generateSyntheticLog(size int) string {
+	sampleSize := len(SyntheticSampleSelection)
+
 	var builder strings.Builder
-	sampleSize = len(SyntheticSampleSelection)
-
-	for i := range size {
-		builder.WriteString(SyntheticSampleSelection[rand.Intn(sampleSize)])
+	for i := 0; i < size; i++ {
+		builder.WriteByte(SyntheticSampleSelection[rand.Intn(sampleSize)])
 	}
-
 	return builder.String()
 }
