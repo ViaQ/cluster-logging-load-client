@@ -22,19 +22,21 @@ func NewPromtailClient(clientURL, tenantID string, disableSecurityCheck bool) (p
 		return nil, err
 	}
 
-	clientConfig := config.HTTPClientConfig{}
-
-	if disableSecurityCheck {
-		clientConfig.TLSConfig = config.TLSConfig{
+	clientConfig := config.HTTPClientConfig{
+		TLSConfig: config.TLSConfig{
 			InsecureSkipVerify: disableSecurityCheck,
-		}
-	} else {
+		},
+	}
+
+	if !disableSecurityCheck {
 		clientConfig.Authorization = &config.Authorization{
 			CredentialsFile: "/var/run/secrets/kubernetes.io/serviceaccount/token",
 		}
-		clientConfig.TLSConfig = config.TLSConfig{
-			CAFile: "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt",
-		}
+		clientConfig.TLSConfig.CAFile = "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt"
+	}
+
+	if err := clientConfig.Validate(); err != nil {
+		return nil, err
 	}
 
 	config := promtail.Config{

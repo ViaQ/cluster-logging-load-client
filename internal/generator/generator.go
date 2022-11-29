@@ -102,7 +102,6 @@ func NewLogGenerator(opts Options) (*LogGenerator, error) {
 		generator.deferClose = func() {
 			_ = generator.elasticsearchBulkIndexer.Close(context.Background())
 		}
-
 	default:
 		generator.writeToDestination = generator.writeLogToStdout
 		generator.deferClose = func() {

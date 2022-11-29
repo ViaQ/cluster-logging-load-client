@@ -20,18 +20,16 @@ func NewLogCLIClient(clientURL, tenant string, disableSecurityCheck bool) (*logc
 	client := logcli.DefaultClient{
 		Address: URL.String(),
 		OrgID:   tenant,
+		TLSConfig: config.TLSConfig{
+			InsecureSkipVerify: disableSecurityCheck,
+		},
 	}
 
-	if disableSecurityCheck {
-		client.TLSConfig = config.TLSConfig{
-			InsecureSkipVerify: disableSecurityCheck,
-		}
-	} else {
+	if !disableSecurityCheck {
 		client.BearerTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-		client.TLSConfig = config.TLSConfig{
-			CAFile: "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt",
-		}
+		client.TLSConfig.CAFile = "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt"
 	}
+
 	return &client, nil
 }
 

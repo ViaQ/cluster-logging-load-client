@@ -30,6 +30,8 @@ func init() {
 	flag.IntVar(&opts.QueriesPerMinute, "queries-per-minute", 1, "The rate to generate queries. This rate may not always be achievable.")
 	flag.StringVar(&opts.Query, "query", "", "Query to use to get logs from storage.")
 	flag.StringVar(&opts.QueryRange, "query-range", "1s", "Duration of time period to query for logs (Loki only).")
+
+	flag.Parse()
 }
 
 func main() {
