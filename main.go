@@ -13,9 +13,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var opts = internal.Options{}
+var (
+	opts = internal.Options{}
+	logLevel string
+)
 
 func init() {
+	flag.StringVar(&logLevel, "log-level", "error", "Overwrite to control the level of logs emitted. Allowed values: debug, info, warning, error")
 	flag.StringVar(&opts.Command, "command", "generate", "Overwrite to control if logs are generated or queried. Allowed values: generate, query.")
 	flag.StringVar(&opts.Destination, "destination", "stdout", "Overwrite to control where logs are queried or written to. Allowed values: loki, elasticsearch, stdout, file.")
 	flag.StringVar(&opts.OutputFile, "file", "output.txt", "The name of the file to write logs to. Only available for \"File\" destinations.")
@@ -24,7 +28,7 @@ func init() {
 	flag.IntVar(&opts.LogsPerSecond, "logs-per-second", 1, "The rate to generate logs. This rate may not always be achievable.")
 	flag.StringVar(&opts.LogType, "log-type", "simple", "Overwrite to control the type of logs generated. Allowed values: simple, application, synthetic.")
 	flag.StringVar(&opts.LogFormat, "log-format", "default", "Overwrite to control the format of logs generated. Allowed values: default, crio (mimic CRIO output), csv, json")
-	flag.StringVar(&opts.LabelType, "label-type", "none", "Overwrite to control what labels are included in Loki logs. Allowed values: none, host, client-host")
+	flag.StringVar(&opts.LabelType, "label-type", "none", "Overwrite to control what labels are included in Loki logs. Allowed values: none, client, client-host")
 	flag.IntVar(&opts.SyntheticPayloadSize, "synthetic-payload-size", 100, "Overwrite to control size of synthetic log line.")
 	flag.StringVar(&opts.Tenant, "tenant", "test", "Loki tenant ID for writing logs.")
 	flag.IntVar(&opts.QueriesPerMinute, "queries-per-minute", 1, "The rate to generate queries. This rate may not always be achievable.")
@@ -36,6 +40,16 @@ func init() {
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+
+	ll, err := log.ParseLevel(logLevel)
+	if err != nil {
+		ll = log.ErrorLevel
+	}
+	
+	log.SetLevel(ll)
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp: true,
+	})
 
 	if configJSON, err := json.MarshalIndent(opts, "", "\t"); err != nil {
 		log.Infof("configuration:\n%s\n", configJSON)
