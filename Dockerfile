@@ -1,4 +1,4 @@
-FROM registry.redhat.io/ubi8/go-toolset:1.17.12 as builder
+FROM registry.redhat.io/ubi8/go-toolset:1.18.4 as builder
 
 WORKDIR /app
 
@@ -11,7 +11,7 @@ RUN go mod download
 
 # Copy source code
 COPY main.go main.go
-COPY loadclient/ loadclient/
+COPY internal/ internal/
 USER 0
 
 # Build

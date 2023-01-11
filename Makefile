@@ -57,16 +57,16 @@ clean-local: ## Clean all the local containers
 	podman rm $(LOKI_CONTAINER_NAME) > /dev/null 2>&1 || true
 
 run-local-es-generate: ## Run logger with remote type elasticsearch
-	./logger generate --log-level info --destination elasticsearch --destination-url http://localhost:9200/ --totalLogLines 5
+	./logger --command generate --log-level info --destination elasticsearch --url http://localhost:9200/
 
 run-local-es-query: ## Generate query requests to elasticsearch v6
-	./logger query --log-level info --destination elasticsearch --destination-url http://localhost:9200/ --query-file ./config/es_queries.yaml --totalLogLines 2
+	./logger --command query --log-level info --destination elasticsearch --url http://localhost:9200/ --query '{ "query": { "range": { "created_at": { "time_zone": "UTC", "gte": "now-1h/h", "lt": "now" } } } }'
 
 run-local-loki-generate: ## Run logger with remote type loki
-	./logger generate --log-level info --destination loki --destination-url http://localhost:3100/api/prom/push --totalLogLines 5
+	./logger --command generate --log-level info --destination loki --url http://localhost:3100/api/prom/push
 
 run-local-loki-query: ## Generate query requests to loki
-	./logger query --log-level info --destination loki --destination-url http://localhost:3100 --query-file ./config/loki_queries.yaml --totalLogLines 2
+	./logger --command query --log-level info --destination loki --url http://localhost:3100 --query {client="promtail"}
 
 deploy-local-es: ## Launch an elasticsearch container
 	podman run -d --name $(ES_CONTAINER_NAME) \
