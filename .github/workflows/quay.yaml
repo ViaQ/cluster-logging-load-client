@@ -48,6 +48,7 @@ jobs:
         images: |
           quay.io/openshift-logging/cluster-logging-load-client
         tags: |
+          type=raw,value=latest,enable={{is_default_branch}}
           type=semver,pattern={{version}}
           type=ref,event=branch
           type=ref,event=pr
