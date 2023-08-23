@@ -21,16 +21,16 @@ help: ## Display this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 lint: $(GOLINT) ## Lints the files
-	 $(GOLINT) main.go
+	$(GOLINT) main.go
 
 fmt: $(GOFUMPT)
-	 $(GOFUMPT) -w .
+	$(GOFUMPT) -w .
 
 build: lint fmt ## Build the executable
 	go build -o logger -v main.go
 
 test: lint fmt ## Run the tests
-	go test -v loadclient/*.go
+	go test ./...
 
 clean: ## Delete the object files and cached files including the executable
 	rm -f ./logger
