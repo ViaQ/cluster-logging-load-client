@@ -1,49 +1,62 @@
 name: quay
+
 on:
   push:
     branches:
-      - main
-
-env:
-  IMAGE_REGISTRY: quay.io
-  IMAGE_ORGANIZATION: openshift-logging
-  IMAGE_LOGGER_NAME: cluster-logging-load-client
+    - main
+  pull_request:
+    branches:
+    - main
 
 jobs:
- publish-client:
-   runs-on: ubuntu-latest
-   steps:
-     - uses: actions/checkout@main
-
-     - name: Set up QEMU
-       uses: docker/setup-qemu-action@v1
-
-     - name: Set up Docker Buildx
-       uses: docker/setup-buildx-action@v1
-
-     - name: Login to Quay.io
-       uses: docker/login-action@v1
-       with:
-         registry: quay.io
-         logout: true
-         username: ${{ secrets.OPENSHIFT_LOGGING_USER }}
-         password: ${{ secrets.OPENSHIFT_LOGGING_PASS }}
-
-     - name: Get image tags
-       id: image_tags
-       run: |
-         echo -n ::set-output name=IMAGE_TAGS::
-         PULLSPEC="$IMAGE_REGISTRY/$IMAGE_ORGANIZATION/$IMAGE_LOGGER_NAME"
-         TAGS=("$PULLSPEC:latest", "$PULLSPEC:v0.0.1")
-         BUILD_DATE="$(date -u +'%Y-%m-%d')"
-         VCS_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-         VCS_REF="$(git rev-parse --short HEAD)"
-         TAGS+=("$PULLSPEC:$VCS_BRANCH-$BUILD_DATE-$VCS_REF")
-         ( IFS=$','; echo "${TAGS[*]}" )
-
-     - name: Build and publish image on quay.io
-       uses: docker/build-push-action@v2
-       with:
-         context: .
-         push: true
-         tags: "${{ steps.image_tags.outputs.IMAGE_TAGS }}"
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version-file: go.mod
+    - name: Build and Test
+      run: make test
+  docker:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    - name: Login to Quay.io
+      uses: docker/login-action@v2
+      with:
+        registry: quay.io
+        logout: true
+        username: ${{ secrets.QUAY_ROBOT_USERNAME }}
+        password: ${{ secrets.QUAY_ROBOT_PASSWORD }}
+    - name: Docker Metadata
+      id: meta
+      uses: docker/metadata-action@v4
+      with:
+        images: |
+          quay.io/openshift-logging/cluster-logging-load-client
+        tags: |
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=semver,pattern={{version}}
+          type=ref,event=branch
+          type=ref,event=pr
+    - name: Build and push Docker images
+      uses: docker/build-push-action@v3
+      with:
+        context: .
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        platforms: linux/amd64

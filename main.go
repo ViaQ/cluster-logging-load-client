@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	opts = internal.Options{}
+	opts     = internal.Options{}
 	logLevel string
 )
 
@@ -45,7 +45,7 @@ func main() {
 	if err != nil {
 		ll = log.ErrorLevel
 	}
-	
+
 	log.SetLevel(ll)
 	log.SetFormatter(&log.TextFormatter{
 		FullTimestamp: true,
