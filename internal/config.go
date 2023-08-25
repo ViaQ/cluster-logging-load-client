@@ -2,6 +2,7 @@ package internal
 
 type Options struct {
 	Command              string
+	Threads              int
 	Destination          string
 	OutputFile           string
 	ClientURL            string

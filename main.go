@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/ViaQ/cluster-logging-load-client/internal"
@@ -21,6 +22,7 @@ var (
 func init() {
 	flag.StringVar(&logLevel, "log-level", "error", "Overwrite to control the level of logs emitted. Allowed values: debug, info, warning, error")
 	flag.StringVar(&opts.Command, "command", "generate", "Overwrite to control if logs are generated or queried. Allowed values: generate, query.")
+	flag.IntVar(&opts.Threads, "threads", 1, "The number of threads to use.")
 	flag.StringVar(&opts.Destination, "destination", "stdout", "Overwrite to control where logs are queried or written to. Allowed values: loki, elasticsearch, stdout, file.")
 	flag.StringVar(&opts.OutputFile, "file", "output.txt", "The name of the file to write logs to. Only available for \"File\" destinations.")
 	flag.StringVar(&opts.ClientURL, "url", "", "URL of Promtail, LogCLI, or Elasticsearch client.")
@@ -55,41 +57,50 @@ func main() {
 		log.Infof("configuration:\n%s\n", configJSON)
 	}
 
-	switch opts.Command {
-	case "generate":
-		generatorOpts := generator.Options{
-			Client:               generator.ClientType(opts.Destination),
-			ClientURL:            opts.ClientURL,
-			FileName:             opts.OutputFile,
-			Tenant:               opts.Tenant,
-			DisableSecurityCheck: opts.DisableSecurityCheck,
-			LogsPerSecond:        opts.LogsPerSecond,
-		}
-		logGenerator, err := generator.NewLogGenerator(generatorOpts)
-		if err != nil {
-			panic(err)
-		}
-		logGenerator.GenerateLogs(
-			generator.LogType(opts.LogType),
-			generator.Format(opts.LogFormat),
-			opts.SyntheticPayloadSize,
-			generator.LabelSetOptions(opts.LabelType),
-		)
-	case "query":
-		querierOpts := querier.Options{
-			Client:               querier.ClientType(opts.Destination),
-			ClientURL:            opts.ClientURL,
-			Tenant:               opts.Tenant,
-			DisableSecurityCheck: opts.DisableSecurityCheck,
-			QueriesPerMinute:     opts.QueriesPerMinute,
-			QueryRange:           opts.QueryRange,
-		}
-		logQuerier, err := querier.NewLogQuerier(querierOpts)
-		if err != nil {
-			panic(err)
-		}
-		logQuerier.QueryLogs(opts.Query)
-	default:
-		panic(fmt.Errorf("unknown command :%s", opts.Command))
+	var runnersWaitGroup sync.WaitGroup
+	runnersWaitGroup.Add(opts.Threads)
+
+	for threadCount := 0; threadCount < opts.Threads; threadCount++ {
+		go func(threadCount int) {
+			switch opts.Command {
+			case "generate":
+				generatorOpts := generator.Options{
+					Client:               generator.ClientType(opts.Destination),
+					ClientURL:            opts.ClientURL,
+					FileName:             opts.OutputFile,
+					Tenant:               opts.Tenant,
+					DisableSecurityCheck: opts.DisableSecurityCheck,
+					LogsPerSecond:        opts.LogsPerSecond,
+				}
+				logGenerator, err := generator.NewLogGenerator(generatorOpts)
+				if err != nil {
+					panic(err)
+				}
+				logGenerator.GenerateLogs(
+					generator.LogType(opts.LogType),
+					generator.Format(opts.LogFormat),
+					opts.SyntheticPayloadSize,
+					generator.LabelSetOptions(opts.LabelType),
+					threadCount,
+				)
+			case "query":
+				querierOpts := querier.Options{
+					Client:               querier.ClientType(opts.Destination),
+					ClientURL:            opts.ClientURL,
+					Tenant:               opts.Tenant,
+					DisableSecurityCheck: opts.DisableSecurityCheck,
+					QueriesPerMinute:     opts.QueriesPerMinute,
+					QueryRange:           opts.QueryRange,
+				}
+				logQuerier, err := querier.NewLogQuerier(querierOpts)
+				if err != nil {
+					panic(err)
+				}
+				logQuerier.QueryLogs(opts.Query)
+			default:
+				panic(fmt.Errorf("unknown command :%s", opts.Command))
+			}
+		}(threadCount)
 	}
+	runnersWaitGroup.Wait()
 }

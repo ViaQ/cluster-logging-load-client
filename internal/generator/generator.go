@@ -112,7 +112,7 @@ func NewLogGenerator(opts Options) (*LogGenerator, error) {
 	return &generator, nil
 }
 
-func (g *LogGenerator) GenerateLogs(logType LogType, logFormat Format, logSize int, labelOpts LabelSetOptions) {
+func (g *LogGenerator) GenerateLogs(logType LogType, logFormat Format, logSize int, labelOpts LabelSetOptions, thread int) {
 	host, err := os.Hostname()
 	if err != nil {
 		log.Fatalf("error getting hostname: %s", err)
@@ -121,6 +121,7 @@ func (g *LogGenerator) GenerateLogs(logType LogType, logFormat Format, logSize i
 	defer g.deferClose()
 
 	var lineCount int64 = 0
+	hash := fmt.Sprintf("%s.%d", host, thread)
 
 	for {
 		next := time.Now().UTC().Add(1 * time.Second)
@@ -131,12 +132,12 @@ func (g *LogGenerator) GenerateLogs(logType LogType, logFormat Format, logSize i
 				log.Fatalf("error creating log: %s", err)
 			}
 
-			formattedLogLine, err := FormatLog(logFormat, host, lineCount, logLine)
+			formattedLogLine, err := FormatLog(logFormat, hash, lineCount, logLine)
 			if err != nil {
 				log.Fatalf("error formating log: %s", err)
 			}
 
-			err = g.writeToDestination(host, formattedLogLine, labelOpts)
+			err = g.writeToDestination(hash, formattedLogLine, labelOpts)
 			if err != nil {
 				log.Fatalf("error writing log: %s", err)
 			}
