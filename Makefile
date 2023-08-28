@@ -11,7 +11,7 @@ IMG ?= quay.io/$(REGISTRY_ORG)/cluster-logging-load-client:$(VERSION)
 ES_CONTAINER_NAME=elasticsearch
 ES_IMAGE_TAG=docker.io/library/elasticsearch:6.8.12
 LOKI_CONTAINER_NAME=loki
-LOKI_IMAGE_TAG=docker.io/grafana/loki:2.2.1
+LOKI_IMAGE_TAG=docker.io/grafana/loki:2.8.3
 
 OCI_RUNTIME ?= $(shell which podman || which docker)
 

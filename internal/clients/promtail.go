@@ -54,9 +54,11 @@ func NewPromtailClient(clientURL, tenantID string, disableSecurityCheck bool) (p
 	}
 
 	client, err := promtail.New(
-		promtail.NewMetrics(nil, nil),
+		promtail.NewMetrics(nil),
 		config,
-		nil,
+		10000,
+		256000,
+		true,
 		kitlog.NewLogfmtLogger(os.Stdout),
 	)
 	if err != nil {
