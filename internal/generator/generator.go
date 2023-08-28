@@ -113,7 +113,7 @@ func NewLogGenerator(opts Options) (*LogGenerator, error) {
 	return &generator, nil
 }
 
-func (g *LogGenerator) GenerateLogs(logType LogType, logFormat Format, logSize int, labelOpts LabelSetOptions, isHostnameUnique bool) {
+func (g *LogGenerator) GenerateLogs(logType LogType, logFormat Format, logSize int, labelOpts LabelSetOptions, randomizeHostname bool) {
 	host, err := os.Hostname()
 	if err != nil {
 		log.Fatalf("error getting hostname: %s", err)
@@ -124,7 +124,7 @@ func (g *LogGenerator) GenerateLogs(logType LogType, logFormat Format, logSize i
 	var lineCount int64 = 0
 
 	logHostname := host
-	if isHostnameUnique {
+	if randomizeHostname {
 		logHostname = fmt.Sprintf("%s.%032X", host, rand.Uint64())
 	}
 
