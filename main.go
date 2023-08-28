@@ -29,6 +29,7 @@ func init() {
 	flag.StringVar(&opts.LogType, "log-type", "simple", "Overwrite to control the type of logs generated. Allowed values: simple, application, synthetic.")
 	flag.StringVar(&opts.LogFormat, "log-format", "default", "Overwrite to control the format of logs generated. Allowed values: default, crio (mimic CRIO output), csv, json")
 	flag.StringVar(&opts.LabelType, "label-type", "none", "Overwrite to control what labels are included in Loki logs. Allowed values: none, client, client-host")
+	flag.BoolVar(&opts.UseRandomHostname, "use-random-hostname", false, "Ensures that the hostname field is unique by adding a random integer to the end.")
 	flag.IntVar(&opts.SyntheticPayloadSize, "synthetic-payload-size", 100, "Overwrite to control size of synthetic log line.")
 	flag.StringVar(&opts.Tenant, "tenant", "test", "Loki tenant ID for writing logs.")
 	flag.IntVar(&opts.QueriesPerMinute, "queries-per-minute", 1, "The rate to generate queries. This rate may not always be achievable.")
@@ -74,6 +75,7 @@ func main() {
 			generator.Format(opts.LogFormat),
 			opts.SyntheticPayloadSize,
 			generator.LabelSetOptions(opts.LabelType),
+			opts.UseRandomHostname,
 		)
 	case "query":
 		querierOpts := querier.Options{

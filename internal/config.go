@@ -11,6 +11,7 @@ type Options struct {
 	LogFormat            string
 	LabelType            string
 	SyntheticPayloadSize int
+	UseRandomHostname    bool
 	Tenant               string
 	QueriesPerMinute     int
 	Query                string
