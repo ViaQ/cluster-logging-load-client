@@ -3,6 +3,7 @@ package generator
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"time"
 
@@ -112,7 +113,7 @@ func NewLogGenerator(opts Options) (*LogGenerator, error) {
 	return &generator, nil
 }
 
-func (g *LogGenerator) GenerateLogs(logType LogType, logFormat Format, logSize int, labelOpts LabelSetOptions) {
+func (g *LogGenerator) GenerateLogs(logType LogType, logFormat Format, logSize int, labelOpts LabelSetOptions, isHostnameUnique bool) {
 	host, err := os.Hostname()
 	if err != nil {
 		log.Fatalf("error getting hostname: %s", err)
@@ -121,6 +122,11 @@ func (g *LogGenerator) GenerateLogs(logType LogType, logFormat Format, logSize i
 	defer g.deferClose()
 
 	var lineCount int64 = 0
+
+	logHostname := host
+	if isHostnameUnique {
+		logHostname = fmt.Sprintf("%s.%032X", host, rand.Uint64())
+	}
 
 	for {
 		next := time.Now().UTC().Add(1 * time.Second)
@@ -131,7 +137,7 @@ func (g *LogGenerator) GenerateLogs(logType LogType, logFormat Format, logSize i
 				log.Fatalf("error creating log: %s", err)
 			}
 
-			formattedLogLine, err := FormatLog(logFormat, host, lineCount, logLine)
+			formattedLogLine, err := FormatLog(logFormat, logHostname, lineCount, logLine)
 			if err != nil {
 				log.Fatalf("error formating log: %s", err)
 			}
