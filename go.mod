@@ -10,6 +10,7 @@ require (
 	github.com/grafana/loki v1.6.2-0.20230721141808-0d81144cfee8
 	github.com/prometheus/common v0.44.0
 	github.com/sirupsen/logrus v1.9.0
+	github.com/spf13/pflag v1.0.5
 )
 
 require (

@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"math/rand"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"github.com/ViaQ/cluster-logging-load-client/internal/generator"
 	"github.com/ViaQ/cluster-logging-load-client/internal/querier"
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/pflag"
 )
 
 var (
@@ -19,24 +19,24 @@ var (
 )
 
 func init() {
-	flag.StringVar(&logLevel, "log-level", "error", "Overwrite to control the level of logs emitted. Allowed values: debug, info, warning, error")
-	flag.StringVar(&opts.Command, "command", "generate", "Overwrite to control if logs are generated or queried. Allowed values: generate, query.")
-	flag.StringVar(&opts.Destination, "destination", "stdout", "Overwrite to control where logs are queried or written to. Allowed values: loki, elasticsearch, stdout, file.")
-	flag.StringVar(&opts.OutputFile, "file", "output.txt", "The name of the file to write logs to. Only available for \"File\" destinations.")
-	flag.StringVar(&opts.ClientURL, "url", "", "URL of Promtail, LogCLI, or Elasticsearch client.")
-	flag.BoolVar(&opts.DisableSecurityCheck, "disable-security-check", false, "Disable security check in HTTPS client.")
-	flag.IntVar(&opts.LogsPerSecond, "logs-per-second", 1, "The rate to generate logs. This rate may not always be achievable.")
-	flag.StringVar(&opts.LogType, "log-type", "simple", "Overwrite to control the type of logs generated. Allowed values: simple, application, synthetic.")
-	flag.StringVar(&opts.LogFormat, "log-format", "default", "Overwrite to control the format of logs generated. Allowed values: default, crio (mimic CRIO output), csv, json")
-	flag.StringVar(&opts.LabelType, "label-type", "none", "Overwrite to control what labels are included in Loki logs. Allowed values: none, client, client-host")
-	flag.BoolVar(&opts.UseRandomHostname, "use-random-hostname", false, "Ensures that the hostname field is unique by adding a random integer to the end.")
-	flag.IntVar(&opts.SyntheticPayloadSize, "synthetic-payload-size", 100, "Overwrite to control size of synthetic log line.")
-	flag.StringVar(&opts.Tenant, "tenant", "test", "Loki tenant ID for writing logs.")
-	flag.IntVar(&opts.QueriesPerMinute, "queries-per-minute", 1, "The rate to generate queries. This rate may not always be achievable.")
-	flag.StringVar(&opts.Query, "query", "", "Query to use to get logs from storage.")
-	flag.StringVar(&opts.QueryRange, "query-range", "1s", "Duration of time period to query for logs (Loki only).")
+	pflag.StringVar(&logLevel, "log-level", "error", "Overwrite to control the level of logs emitted. Allowed values: debug, info, warning, error")
+	pflag.StringVar(&opts.Command, "command", "generate", "Overwrite to control if logs are generated or queried. Allowed values: generate, query.")
+	pflag.StringVar(&opts.Destination, "destination", "stdout", "Overwrite to control where logs are queried or written to. Allowed values: loki, elasticsearch, stdout, file.")
+	pflag.StringVar(&opts.OutputFile, "file", "output.txt", "The name of the file to write logs to. Only available for \"File\" destinations.")
+	pflag.StringVar(&opts.ClientURL, "url", "", "URL of Promtail, LogCLI, or Elasticsearch client.")
+	pflag.BoolVar(&opts.DisableSecurityCheck, "disable-security-check", false, "Disable security check in HTTPS client.")
+	pflag.IntVar(&opts.LogsPerSecond, "logs-per-second", 1, "The rate to generate logs. This rate may not always be achievable.")
+	pflag.StringVar(&opts.LogType, "log-type", "simple", "Overwrite to control the type of logs generated. Allowed values: simple, application, synthetic.")
+	pflag.StringVar(&opts.LogFormat, "log-format", "default", "Overwrite to control the format of logs generated. Allowed values: default, crio (mimic CRIO output), csv, json")
+	pflag.StringVar(&opts.LabelType, "label-type", "none", "Overwrite to control what labels are included in Loki logs. Allowed values: none, client, client-host")
+	pflag.BoolVar(&opts.UseRandomHostname, "use-random-hostname", false, "Ensures that the hostname field is unique by adding a random integer to the end.")
+	pflag.IntVar(&opts.SyntheticPayloadSize, "synthetic-payload-size", 100, "Overwrite to control size of synthetic log line.")
+	pflag.StringVar(&opts.Tenant, "tenant", "test", "Loki tenant ID for writing logs.")
+	pflag.IntVar(&opts.QueriesPerMinute, "queries-per-minute", 1, "The rate to generate queries. This rate may not always be achievable.")
+	pflag.StringVar(&opts.Query, "query", "", "Query to use to get logs from storage.")
+	pflag.StringVar(&opts.QueryRange, "query-range", "1s", "Duration of time period to query for logs (Loki only).")
 
-	flag.Parse()
+	pflag.Parse()
 }
 
 func main() {
