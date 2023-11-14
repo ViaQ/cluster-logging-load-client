@@ -4,7 +4,7 @@ PHONY: all build test clean build-image deploy undeploy push-image run-es
 include .bingo/Variables.mk
 
 REGISTRY_ORG ?= openshift-logging
-VERSION ?= 0.1
+VERSION ?= dev
 
 IMG ?= quay.io/$(REGISTRY_ORG)/cluster-logging-load-client:$(VERSION)
 

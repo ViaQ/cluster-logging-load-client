@@ -3,14 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
-	"time"
+
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/pflag"
 
 	"github.com/ViaQ/cluster-logging-load-client/internal"
 	"github.com/ViaQ/cluster-logging-load-client/internal/generator"
 	"github.com/ViaQ/cluster-logging-load-client/internal/querier"
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/pflag"
 )
 
 var (
@@ -40,8 +39,6 @@ func init() {
 }
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
-
 	ll, err := log.ParseLevel(logLevel)
 	if err != nil {
 		ll = log.ErrorLevel
