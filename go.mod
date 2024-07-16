@@ -1,11 +1,13 @@
 module github.com/ViaQ/cluster-logging-load-client
 
-go 1.20
+go 1.21
+
+toolchain go1.21.12
 
 require (
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/elastic/go-elasticsearch/v6 v6.8.10
-	github.com/go-kit/kit v0.13.0
+	github.com/go-kit/log v0.2.1
 	github.com/grafana/dskit v0.0.0-20231017083947-7b512eb54d47
 	github.com/grafana/loki v1.6.2-0.20231114151751-3a7b5d246b01
 	github.com/prometheus/common v0.45.0
@@ -18,6 +20,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.3.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.3.0 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.0.0 // indirect
+	github.com/HdrHistogram/hdrhistogram-go v1.1.2 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.2.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.2.3 // indirect
@@ -42,7 +45,6 @@ require (
 	github.com/fatih/color v1.15.0 // indirect
 	github.com/felixge/httpsnoop v1.0.3 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
-	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
