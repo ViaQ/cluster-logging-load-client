@@ -14,6 +14,7 @@ LOKI_CONTAINER_NAME=loki
 LOKI_IMAGE_TAG=docker.io/grafana/loki:2.8.3
 
 OCI_RUNTIME ?= $(shell which podman || which docker)
+GO ?= go
 
 all: clean build test build-image local ## Runs all commands
 
@@ -27,14 +28,13 @@ fmt: $(GOFUMPT)
 	$(GOFUMPT) -w .
 
 build: lint fmt ## Build the executable
-	go build -o logger -v main.go
+	$(GO) build -o logger main.go
 
 test: lint fmt ## Run the tests
-	go test ./...
+	$(GO) test ./...
 
-clean: ## Delete the object files and cached files including the executable
+clean: ## Delete the executable
 	rm -f ./logger
-	go clean ./...
 
 build-image: ## Build the image
 	$(OCI_RUNTIME) build -t $(IMG) .
