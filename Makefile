@@ -51,10 +51,10 @@ undeploy: ## Undeploy the image
 local: clean-local deploy-local-es deploy-local-loki run-local-es-generate run-local-es-query run-local-loki-generate run-local-loki-query ## Run all the local commands
 
 clean-local: ## Clean all the local containers
-	podman kill $(ES_CONTAINER_NAME) > /dev/null 2>&1 || true
-	podman rm $(ES_CONTAINER_NAME) > /dev/null 2>&1 || true
-	podman kill $(LOKI_CONTAINER_NAME) > /dev/null 2>&1 || true
-	podman rm $(LOKI_CONTAINER_NAME) > /dev/null 2>&1 || true
+	$(OCI_RUNTIME) kill $(ES_CONTAINER_NAME) > /dev/null 2>&1 || true
+	$(OCI_RUNTIME) rm $(ES_CONTAINER_NAME) > /dev/null 2>&1 || true
+	$(OCI_RUNTIME) kill $(LOKI_CONTAINER_NAME) > /dev/null 2>&1 || true
+	$(OCI_RUNTIME) rm $(LOKI_CONTAINER_NAME) > /dev/null 2>&1 || true
 
 run-local-es-generate: ## Run logger with remote type elasticsearch
 	./logger --command generate --log-level info --destination elasticsearch --url http://localhost:9200/
@@ -69,14 +69,14 @@ run-local-loki-query: ## Generate query requests to loki
 	./logger --command query --log-level info --destination loki --url http://localhost:3100 --query {client="promtail"}
 
 deploy-local-es: ## Launch an elasticsearch container
-	podman run -d --name $(ES_CONTAINER_NAME) \
+	$(OCI_RUNTIME) run -d --name $(ES_CONTAINER_NAME) \
 		-p 9200:9200 -p 9300:9300 \
 		-e "discovery.type=single-node" \
 		$(ES_IMAGE_TAG)
 	sleep 20
 
 deploy-local-loki: ## Launch a loki container
-	podman run -d --name $(LOKI_CONTAINER_NAME) \
+	$(OCI_RUNTIME) run -d --name $(LOKI_CONTAINER_NAME) \
 		-p 3100:3100 \
 		-e "discovery.type=single-node" \
 		$(LOKI_IMAGE_TAG)
