@@ -18,6 +18,10 @@ const (
 
 	// JSONFormat formats a log to appear in JSON style
 	JSONFormat Format = "json"
+
+	// RawFormat formats a log to appear as the sample with no changes.  This is most
+	// applicable for audit like samples
+	RawFormat Format = "raw"
 )
 
 func FormatLog(style Format, hash string, messageCount int64, payload string) (string, error) {
@@ -42,6 +46,8 @@ func FormatLog(style Format, hash string, messageCount int64, payload string) (s
 			return "", err
 		}
 		return fmt.Sprintln(string(messageJSON)), nil
+	case RawFormat:
+		return fmt.Sprintln(payload), nil
 	default:
 		return fmt.Sprintf("goloader seq - %s - %010d - %s\n", hash, messageCount, payload), nil
 	}
