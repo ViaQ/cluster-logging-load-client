@@ -23,9 +23,9 @@ Usage of ./logger:
       --disable-security-check       Disable security check in HTTPS client.
       --file string                  The name of the file to write logs to. Only available for "File" destinations. (default "output.txt")
       --label-type string            Overwrite to control what labels are included in Loki logs. Allowed values: none, client, client-host (default "none")
-      --log-format string            Overwrite to control the format of logs generated. Allowed values: default, crio (mimic CRIO output), csv, json (default "default")
+      --log-format string            Overwrite to control the format of logs generated. Allowed values: default, crio (mimic CRIO output), csv, json (default "default"), raw
       --log-level string             Overwrite to control the level of logs emitted. Allowed values: debug, info, warning, error (default "error")
-      --log-type string              Overwrite to control the type of logs generated. Allowed values: simple, application, synthetic. (default "simple")
+      --log-type string              Overwrite to control the type of logs generated. Allowed values: application, audit, simple, synthetic. (default "simple")
       --logs-per-second int          The rate to generate logs. This rate may not always be achievable. (default 1)
       --queries-per-minute int       The rate to generate queries. This rate may not always be achievable. (default 1)
       --query string                 Query to use to get logs from storage.
