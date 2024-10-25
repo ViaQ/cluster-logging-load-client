@@ -1,6 +1,7 @@
 package generator
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -15,6 +16,9 @@ const (
 	// ApplicationLogType represents a log that is likely to be seen in an
 	// application runtime environment.
 	ApplicationLogType LogType = "application"
+
+	// AuditLogType represents a log from a kubernetes API server audit log
+	AuditLogType LogType = "audit"
 
 	// SyntheticLogType represents a log that is composed of random
 	// alphabetical characters of a certain size.
@@ -93,6 +97,11 @@ var (
 		"[DEBUG] plugin/errors: 2 kubernetes.default.svc. A: read udp 1.1.1.1:54608->1.1.1.1:53: i/o timeout",
 		"D0426 20:39:28.065697       1 scheduler.go:599] error selecting node for pod: running \"VolumeBinding\" filter plugin for pod \"eric-data-document-database-pg-1\": pod has unbound immediate PersistentVolumeClaims",
 	}
+
+	//go:embed samples_audit.txt
+	auditSamplesRaw string
+
+	auditSamples = strings.Split(strings.TrimSpace(auditSamplesRaw), "\n")
 )
 
 // RandomLog returns a log of a given type from the requested sample set.
@@ -101,6 +110,9 @@ func RandomLog(logType LogType, logSize int) (string, error) {
 	case ApplicationLogType:
 		index := rand.Intn(len(applicationSamples))
 		return applicationSamples[index], nil
+	case AuditLogType:
+		index := rand.Intn(len(auditSamples))
+		return auditSamples[index], nil
 	case SyntheticLogType:
 		if logSize < 0 {
 			return "", fmt.Errorf("invalid size for sythentic log")
