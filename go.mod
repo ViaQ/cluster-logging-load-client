@@ -1,8 +1,8 @@
 module github.com/ViaQ/cluster-logging-load-client
 
-go 1.21
+go 1.23
 
-toolchain go1.21.12
+toolchain go1.23.4
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
