@@ -1,8 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+
+	"github.com/ViaQ/cluster-logging-load-client/internal/web"
+	"github.com/prometheus/client_golang/prometheus"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
@@ -55,6 +63,7 @@ func main() {
 
 	switch opts.Command {
 	case "generate":
+		registry := prometheus.NewRegistry()
 		generatorOpts := generator.Options{
 			Client:               generator.ClientType(opts.Destination),
 			ClientURL:            opts.ClientURL,
@@ -62,18 +71,43 @@ func main() {
 			Tenant:               opts.Tenant,
 			DisableSecurityCheck: opts.DisableSecurityCheck,
 			LogsPerSecond:        opts.LogsPerSecond,
+			LogType:              opts.LogType,
+			LogFormat:            opts.LogFormat,
+			LabelType:            opts.LabelType,
+			SyntheticPayloadSize: opts.SyntheticPayloadSize,
+			UseRandomHostname:    opts.UseRandomHostname,
 		}
-		logGenerator, err := generator.NewLogGenerator(generatorOpts)
+		logGenerator, err := generator.NewLogGenerator(generatorOpts, registry)
 		if err != nil {
 			panic(err)
 		}
-		logGenerator.GenerateLogs(
-			generator.LogType(opts.LogType),
-			generator.Format(opts.LogFormat),
-			opts.SyntheticPayloadSize,
-			generator.LabelSetOptions(opts.LabelType),
-			opts.UseRandomHostname,
-		)
+		components := []internal.Component{
+			logGenerator,
+			web.NewServer(web.ServerConfig{
+				ListenAddress: ":8081",
+			}, log.StandardLogger(), registry),
+		}
+
+		wg := &sync.WaitGroup{}
+		errCh := make(chan error, 1)
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM|syscall.SIGINT)
+		defer cancel()
+
+		go func() {
+			for err := range errCh {
+				log.Errorf("Fatal error: %v", err)
+				cancel()
+			}
+		}()
+
+		for _, c := range components {
+			c.Start(ctx, wg, errCh)
+		}
+
+		log.Debug("All components running.")
+		wg.Wait()
+		close(errCh)
+		log.Debug("All components stopped.")
 	case "query":
 		querierOpts := querier.Options{
 			Client:               querier.ClientType(opts.Destination),

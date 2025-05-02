@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sync"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ViaQ/cluster-logging-load-client/internal/clients"
 
@@ -29,7 +32,7 @@ const (
 	ElasticsearchClientType ClientType = "elasticsearch"
 )
 
-// Options describes the settings that can be modified for the querier
+// Options describes the settings that can be modified for the log generator
 type Options struct {
 	// Client describes the client to use for forwarding
 	Client ClientType
@@ -43,6 +46,12 @@ type Options struct {
 	DisableSecurityCheck bool
 	// LogsPerSecond is the number of logs to write per second
 	LogsPerSecond int
+
+	LogType              string
+	LogFormat            string
+	LabelType            string
+	SyntheticPayloadSize int
+	UseRandomHostname    bool
 }
 
 // LogGenerator describes an object which generates logs
@@ -54,12 +63,22 @@ type LogGenerator struct {
 	rate                     int
 	writeToDestination       func(string, string, LabelSetOptions) error
 	deferClose               func()
+	logCount                 prometheus.Counter
+	opts                     Options
 }
 
-func NewLogGenerator(opts Options) (*LogGenerator, error) {
+func NewLogGenerator(opts Options, registry *prometheus.Registry) (*LogGenerator, error) {
 	generator := LogGenerator{
+		opts: opts,
 		rate: opts.LogsPerSecond,
+		logCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "log_generator_messages_produced_total",
+			Help: "Total number of messages produced by the log generator",
+		}),
 	}
+	registry.MustRegister(
+		generator.logCount,
+	)
 
 	switch opts.Client {
 	case "file":
@@ -113,18 +132,30 @@ func NewLogGenerator(opts Options) (*LogGenerator, error) {
 	return &generator, nil
 }
 
-func (g *LogGenerator) GenerateLogs(logType LogType, logFormat Format, logSize int, labelOpts LabelSetOptions, randomizeHostname bool) {
+func (g *LogGenerator) Start(ctx context.Context, wg *sync.WaitGroup, errCh chan<- error) {
+	wg.Add(1)
+	go func() {
+		<-ctx.Done()
+		log.Debug("Shutting down log generator...")
+		g.deferClose()
+	}()
+	go func() {
+		defer wg.Done()
+		g.GenerateLogs()
+	}()
+}
+
+func (g *LogGenerator) GenerateLogs() {
 	host, err := os.Hostname()
 	if err != nil {
 		log.Fatalf("error getting hostname: %s", err)
 	}
-
 	defer g.deferClose()
 
 	var lineCount int64 = 0
 
 	logHostname := host
-	if randomizeHostname {
+	if g.opts.UseRandomHostname {
 		logHostname = fmt.Sprintf("%s.%032X", host, rand.Uint64())
 	}
 
@@ -132,21 +163,22 @@ func (g *LogGenerator) GenerateLogs(logType LogType, logFormat Format, logSize i
 		next := time.Now().UTC().Add(1 * time.Second)
 
 		for i := 0; i < g.rate; i++ {
-			logLine, err := RandomLog(logType, logSize)
+			logLine, err := RandomLog(LogType(g.opts.LogType), g.opts.SyntheticPayloadSize)
 			if err != nil {
 				log.Fatalf("error creating log: %s", err)
 			}
 
-			formattedLogLine, err := FormatLog(logFormat, logHostname, lineCount, logLine)
+			formattedLogLine, err := FormatLog(Format(g.opts.LogFormat), logHostname, lineCount, logLine)
 			if err != nil {
 				log.Fatalf("error formating log: %s", err)
 			}
 
-			err = g.writeToDestination(host, formattedLogLine, labelOpts)
+			err = g.writeToDestination(host, formattedLogLine, LabelSetOptions(g.opts.LabelType))
 			if err != nil {
 				log.Fatalf("error writing log: %s", err)
 			}
 
+			g.logCount.Inc()
 			lineCount++
 		}
 
