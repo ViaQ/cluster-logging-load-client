@@ -90,7 +90,7 @@ func main() {
 
 		wg := &sync.WaitGroup{}
 		errCh := make(chan error, 1)
-		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM|syscall.SIGINT)
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer cancel()
 
 		go func() {
