@@ -132,20 +132,15 @@ func NewLogGenerator(opts Options, registry *prometheus.Registry) (*LogGenerator
 	return &generator, nil
 }
 
-func (g *LogGenerator) Start(ctx context.Context, wg *sync.WaitGroup, errCh chan<- error) {
+func (g *LogGenerator) Start(ctx context.Context, wg *sync.WaitGroup, _ chan<- error) {
 	wg.Add(1)
 	go func() {
-		<-ctx.Done()
-		log.Debug("Shutting down log generator...")
-		g.deferClose()
-	}()
-	go func() {
 		defer wg.Done()
-		g.GenerateLogs()
+		g.generateLogs(ctx)
 	}()
 }
 
-func (g *LogGenerator) GenerateLogs() {
+func (g *LogGenerator) generateLogs(ctx context.Context) {
 	host, err := os.Hostname()
 	if err != nil {
 		log.Fatalf("error getting hostname: %s", err)
@@ -160,6 +155,11 @@ func (g *LogGenerator) GenerateLogs() {
 	}
 
 	for {
+		if err := ctx.Err(); err != nil {
+			log.Debug("Shutting down log generator...")
+			break
+		}
+
 		next := time.Now().UTC().Add(1 * time.Second)
 
 		for i := 0; i < g.rate; i++ {
