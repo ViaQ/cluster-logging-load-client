@@ -1,4 +1,10 @@
-FROM docker.io/library/golang:1.25.5 AS builder
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.25.5 AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV GOOS=$TARGETOS
+ENV GOARCH=$TARGETARCH
 
 WORKDIR /app
 
