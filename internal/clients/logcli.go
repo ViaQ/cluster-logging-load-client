@@ -4,8 +4,8 @@ import (
 	"net/url"
 	"time"
 
-	logcli "github.com/grafana/loki/pkg/logcli/client"
-	"github.com/grafana/loki/pkg/logproto"
+	logcli "github.com/grafana/loki/v3/pkg/logcli/client"
+	"github.com/grafana/loki/v3/pkg/logproto"
 	"github.com/prometheus/common/config"
 	log "github.com/sirupsen/logrus"
 )

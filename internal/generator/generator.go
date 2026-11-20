@@ -14,7 +14,7 @@ import (
 
 	"github.com/elastic/go-elasticsearch/v6"
 	"github.com/elastic/go-elasticsearch/v6/esutil"
-	promtail "github.com/grafana/loki/clients/pkg/promtail/client"
+	promtail "github.com/grafana/loki/v3/clients/pkg/promtail/client"
 	log "github.com/sirupsen/logrus"
 )
 
