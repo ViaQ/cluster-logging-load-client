@@ -7,7 +7,7 @@ import (
 	"github.com/ViaQ/cluster-logging-load-client/internal/clients"
 
 	"github.com/elastic/go-elasticsearch/v6"
-	logcli "github.com/grafana/loki/pkg/logcli/client"
+	logcli "github.com/grafana/loki/v3/pkg/logcli/client"
 	log "github.com/sirupsen/logrus"
 )
 
