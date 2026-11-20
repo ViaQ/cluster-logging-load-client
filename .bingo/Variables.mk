@@ -29,11 +29,11 @@ $(BINGO): $(BINGO_DIR)/bingo.mod
 	@echo "(re)installing $(GOBIN)/bingo-v0.10.0"
 	@cd $(BINGO_DIR) && GOWORK=off GOOS=$(GOHOSTOS) GOARCH=$(GOHOSTARCH) GOARM=$(GOHOSTARM) $(GO) build -mod=mod -modfile=bingo.mod -o=$(GOBIN)/bingo-v0.10.0 "github.com/bwplotka/bingo"
 
-GOFUMPT := $(GOBIN)/gofumpt-v0.6.0
+GOFUMPT := $(GOBIN)/gofumpt-v0.12.0
 $(GOFUMPT): $(BINGO_DIR)/gofumpt.mod
 	@# Install binary/ries using Go 1.14+ build command. This is using bwplotka/bingo-controlled, separate go module with pinned dependencies.
-	@echo "(re)installing $(GOBIN)/gofumpt-v0.6.0"
-	@cd $(BINGO_DIR) && GOWORK=off GOOS=$(GOHOSTOS) GOARCH=$(GOHOSTARCH) GOARM=$(GOHOSTARM) $(GO) build -mod=mod -modfile=gofumpt.mod -o=$(GOBIN)/gofumpt-v0.6.0 "mvdan.cc/gofumpt"
+	@echo "(re)installing $(GOBIN)/gofumpt-v0.12.0"
+	@cd $(BINGO_DIR) && GOWORK=off GOOS=$(GOHOSTOS) GOARCH=$(GOHOSTARCH) GOARM=$(GOHOSTARM) $(GO) build -mod=mod -modfile=gofumpt.mod -o=$(GOBIN)/gofumpt-v0.12.0 "mvdan.cc/gofumpt"
 
 GOLINT := $(GOBIN)/golint-v0.0.0-20210508222113-6edffad5e616
 $(GOLINT): $(BINGO_DIR)/golint.mod
