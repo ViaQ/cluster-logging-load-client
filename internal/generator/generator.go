@@ -52,6 +52,17 @@ type Options struct {
 	LabelType            string
 	SyntheticPayloadSize int
 	UseRandomHostname    bool
+
+	// PayloadConfig is the path to a payload config file (required for LogType "config")
+	PayloadConfig string
+	// LoaderID is substituted for {{LOADER_ID}} in payload templates
+	LoaderID string
+	// StartSignalFile, when set, blocks emission until the file exists
+	StartSignalFile string
+	// Duration bounds the emission window. Zero means unlimited
+	Duration time.Duration
+	// SentCountFile, when set with Duration, receives the emitted line count
+	SentCountFile string
 }
 
 // LogGenerator describes an object which generates logs
@@ -65,6 +76,7 @@ type LogGenerator struct {
 	deferClose               func()
 	logCount                 prometheus.Counter
 	opts                     Options
+	payload                  *PayloadSource
 }
 
 func NewLogGenerator(opts Options, registry *prometheus.Registry) (*LogGenerator, error) {
@@ -79,6 +91,19 @@ func NewLogGenerator(opts Options, registry *prometheus.Registry) (*LogGenerator
 	registry.MustRegister(
 		generator.logCount,
 	)
+
+	if LogType(opts.LogType) == ConfigLogType {
+		if opts.PayloadConfig == "" {
+			return nil, fmt.Errorf("--payload-config is required when --log-type is %q", ConfigLogType)
+		}
+		cfg, err := LoadPayloadConfig(opts.PayloadConfig)
+		if err != nil {
+			return nil, err
+		}
+		if generator.payload, err = NewPayloadSource(cfg, opts.LoaderID); err != nil {
+			return nil, err
+		}
+	}
 
 	switch opts.Client {
 	case "file":
@@ -147,25 +172,66 @@ func (g *LogGenerator) generateLogs(ctx context.Context) {
 	}
 	defer g.deferClose()
 
-	var lineCount int64 = 0
-
 	logHostname := host
 	if g.opts.UseRandomHostname {
 		logHostname = fmt.Sprintf("%s.%032X", host, rand.Uint64())
 	}
+
+	if g.opts.StartSignalFile != "" {
+		if err := WaitForFile(ctx, g.opts.StartSignalFile, startSignalPollInterval); err != nil {
+			log.Debug("Shutting down log generator before start signal...")
+			return
+		}
+	}
+
+	var deadline time.Time
+	if g.opts.Duration > 0 {
+		deadline = time.Now().Add(g.opts.Duration)
+	}
+
+	lineCount := g.emit(ctx, host, logHostname, deadline)
+
+	if g.opts.Duration > 0 {
+		if g.opts.SentCountFile != "" {
+			if err := WriteSentCount(g.opts.SentCountFile, lineCount); err != nil {
+				log.Fatalf("error writing sent count file: %s", err)
+			}
+		}
+		// Never exit: a restart would reset {{SEQ}} and falsify loss accounting.
+		idle(ctx)
+	}
+}
+
+// emit runs the paced emission loop until ctx is cancelled or, when deadline is
+// non-zero, the deadline passes. It returns the number of lines emitted.
+func (g *LogGenerator) emit(ctx context.Context, host, logHostname string, deadline time.Time) int64 {
+	var lineCount int64 = 0
+	expired := func() bool { return !deadline.IsZero() && !time.Now().Before(deadline) }
 
 	for {
 		if err := ctx.Err(); err != nil {
 			log.Debug("Shutting down log generator...")
 			break
 		}
+		if expired() {
+			break
+		}
 
 		next := time.Now().UTC().Add(1 * time.Second)
 
 		for i := 0; i < g.rate; i++ {
-			logLine, err := RandomLog(LogType(g.opts.LogType), g.opts.SyntheticPayloadSize)
-			if err != nil {
-				log.Fatalf("error creating log: %s", err)
+			if expired() {
+				break
+			}
+			var logLine string
+			if g.payload != nil {
+				logLine = g.payload.Next()
+			} else {
+				var err error
+				logLine, err = RandomLog(LogType(g.opts.LogType), g.opts.SyntheticPayloadSize)
+				if err != nil {
+					log.Fatalf("error creating log: %s", err)
+				}
 			}
 
 			formattedLogLine, err := FormatLog(Format(g.opts.LogFormat), logHostname, lineCount, logLine)
@@ -183,10 +249,46 @@ func (g *LogGenerator) generateLogs(ctx context.Context) {
 		}
 
 		current := time.Now().UTC()
-		if current.Before(next) {
-			time.Sleep(next.Sub(current))
+		wakeAt := next
+		if !deadline.IsZero() && deadline.Before(wakeAt) {
+			wakeAt = deadline
+		}
+		if current.Before(wakeAt) {
+			time.Sleep(wakeAt.Sub(current))
 		}
 	}
+	return lineCount
+}
+
+const startSignalPollInterval = 100 * time.Millisecond
+
+// WaitForFile blocks until path exists, polling at the given interval. It
+// returns the context error if ctx is cancelled first.
+func WaitForFile(ctx context.Context, path string, poll time.Duration) error {
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(poll):
+		}
+	}
+}
+
+// WriteSentCount writes the emitted line count to path via temp file and rename.
+func WriteSentCount(path string, count int64) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(fmt.Sprintf("%d\n", count)), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// idle blocks until ctx is cancelled.
+func idle(ctx context.Context) {
+	<-ctx.Done()
 }
 
 func (g *LogGenerator) writeLogToStdout(host, logLine string, labelOpts LabelSetOptions) error {

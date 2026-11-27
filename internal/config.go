@@ -1,5 +1,7 @@
 package internal
 
+import "time"
+
 type Options struct {
 	Command              string
 	Destination          string
@@ -16,4 +18,9 @@ type Options struct {
 	QueriesPerMinute     int
 	Query                string
 	QueryRange           string
+	PayloadConfig        string
+	LoaderID             string
+	StartSignalFile      string
+	Duration             time.Duration
+	SentCountFile        string
 }
