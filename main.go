@@ -33,7 +33,7 @@ func init() {
 	pflag.StringVar(&opts.ClientURL, "url", "", "URL of Promtail, LogCLI, or Elasticsearch client.")
 	pflag.BoolVar(&opts.DisableSecurityCheck, "disable-security-check", false, "Disable security check in HTTPS client.")
 	pflag.IntVar(&opts.LogsPerSecond, "logs-per-second", 1, "The rate to generate logs. This rate may not always be achievable.")
-	pflag.StringVar(&opts.LogType, "log-type", "simple", "Overwrite to control the type of logs generated. Allowed values: application, audit, simple, synthetic.")
+	pflag.StringVar(&opts.LogType, "log-type", "simple", "Overwrite to control the type of logs generated. Allowed values: application, audit, simple, synthetic, config.")
 	pflag.StringVar(&opts.LogFormat, "log-format", "default", "Overwrite to control the format of logs generated. Allowed values: default, crio (mimic CRIO output), csv, json, raw")
 	pflag.StringVar(&opts.LabelType, "label-type", "none", "Overwrite to control what labels are included in Loki logs. Allowed values: none, client, client-host")
 	pflag.BoolVar(&opts.UseRandomHostname, "use-random-hostname", false, "Ensures that the hostname field is unique by adding a random integer to the end.")
@@ -42,6 +42,12 @@ func init() {
 	pflag.IntVar(&opts.QueriesPerMinute, "queries-per-minute", 1, "The rate to generate queries. This rate may not always be achievable.")
 	pflag.StringVar(&opts.Query, "query", "", "Query to use to get logs from storage.")
 	pflag.StringVar(&opts.QueryRange, "query-range", "1s", "Duration of time period to query for logs (Loki only).")
+
+	pflag.StringVar(&opts.PayloadConfig, "payload-config", "", "Path to a JSON payload config (weighted message templates). Required for --log-type config.")
+	pflag.StringVar(&opts.LoaderID, "loader-id", "", "Value substituted for {{LOADER_ID}} in payload templates.")
+	pflag.StringVar(&opts.StartSignalFile, "start-signal-file", "", "When set, wait until this file exists before emitting any logs.")
+	pflag.DurationVar(&opts.Duration, "duration", 0, "Emit logs for this long, then idle forever. 0 means unlimited.")
+	pflag.StringVar(&opts.SentCountFile, "sent-count-file", "", "When set (with --duration), write the total emitted line count to this file when emission ends.")
 
 	pflag.Parse()
 }
@@ -76,6 +82,11 @@ func main() {
 			LabelType:            opts.LabelType,
 			SyntheticPayloadSize: opts.SyntheticPayloadSize,
 			UseRandomHostname:    opts.UseRandomHostname,
+			PayloadConfig:        opts.PayloadConfig,
+			LoaderID:             opts.LoaderID,
+			StartSignalFile:      opts.StartSignalFile,
+			Duration:             opts.Duration,
+			SentCountFile:        opts.SentCountFile,
 		}
 		logGenerator, err := generator.NewLogGenerator(generatorOpts, registry)
 		if err != nil {
